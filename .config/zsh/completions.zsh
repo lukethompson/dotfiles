@@ -1,3 +1,5 @@
+# Inspired by https://github.com/Phantas0s/.dotfiles/blob/master/zsh/completion.zsh
+
 # =====================================
 # General
 # =====================================
