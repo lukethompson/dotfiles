@@ -12,6 +12,8 @@ prompt pure
 
 # fnm - Fast Node Manager
 eval "$(fnm env --use-on-cd --shell zsh)"
+# fzf - command line fuzzy finder
+source <(fzf --zsh)
 
 # =====================================
 # Aliases
