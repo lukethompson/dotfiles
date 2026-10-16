@@ -1,11 +1,15 @@
-.DS_Store
+\.DS_Store
 
-.git
-.gitignore
-.gitmodules
+\.git
+\.gitignore
+\.gitmodules
 
-README.md
+^/README\.md
+^/LICENSE
+^/Brewfile
+^/bootstrap\.sh
+^/AGENTS\.md
 
-LICENSE
-
-Brewfile
+.+~
+\#.*\#
+\.#.+
