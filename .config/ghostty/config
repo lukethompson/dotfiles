@@ -1,12 +1,12 @@
 theme = Snazzy
-
 background = #000000
 font-family = Hack
 font-size = 14
 font-thicken = true
 
 shell-integration-features = no-cursor
-cursor-style = block
+
+copy-on-select = clipboard
 
 macos-icon = custom-style
 macos-icon-ghost-color = #ffffff
