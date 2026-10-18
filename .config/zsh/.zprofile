@@ -13,7 +13,7 @@ fi
 # drops the later duplicate.
 #
 # fnm's default Node comes next, so login shells that never run .zshrc
-# (zsh -lc, agents' commands) still find node without fnm env. Interactive
+# (zsh -lc) still find node without fnm env. Interactive
 # shells put fnm env's per-shell version ahead of it.
 path=("$HOME/.local/bin" ${FNM_DIR:+"$FNM_DIR/aliases/default/bin"} $path)
 

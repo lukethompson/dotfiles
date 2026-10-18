@@ -101,7 +101,8 @@ their auth stores between machines.
 
 ## Node for scripts and agents
 Interactive shells switch Node per directory (`fnm env --use-on-cd`). Login shells that skip
-`.zshrc`, like the `zsh -lc` an agent runs, get fnm's default Node instead. To run a command on
+`.zshrc`, like `zsh -lc`, get fnm's default Node instead; a command an agent runs through a
+non-login, non-interactive shell inherits whatever `PATH` the agent was started with. To run a command on
 the version a project's `.node-version` or `.nvmrc` asks for:
 
 ```bash
