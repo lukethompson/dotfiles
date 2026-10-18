@@ -63,9 +63,12 @@ zstyle ':completion:*:*:-command-:*:*' group-order aliases builtins functions co
 
 # Improve completion hosts
 zstyle ':completion:*' use-ip true
+# Skips hashed entries (Debian's ssh hashes known_hosts by default), markers
+# such as @cert-authority and comments, and drops the [host]:port brackets.
 if [[ -r ~/.ssh/known_hosts ]]; then
   zstyle ':completion:*:(ssh|scp|rsync):*' hosts \
-      $(awk '{print $1}' ~/.ssh/known_hosts | cut -d, -f1 | sort -u)
+      $(awk '$1 !~ /^[|@#]/ {print $1}' ~/.ssh/known_hosts | cut -d, -f1 |
+        sed -E 's/^\[([^]]+)\]:[0-9]+$/\1/' | sort -u)
 fi
 
 # =====================================
