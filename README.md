@@ -20,6 +20,8 @@ My personal dotfiles for macOS and a headless Debian dev machine.
 ## Installation
 
 ```bash
+# Debian only: a fresh install has no git yet
+sudo apt install git
 # Clone the repository into your home directory
 git clone https://github.com/lukethompson/dotfiles.git
 cd dotfiles
@@ -46,6 +48,7 @@ Asks for `sudo` once, only when packages are missing, and installs:
 | Tool | From | Update with |
 | --- | --- | --- |
 | zsh, git, gh, fzf, lazygit, ripgrep, fd, jq, stow, nano, build tools | apt (`APT_PACKAGES` in `bootstrap.sh`) | `sudo apt upgrade` |
+| `xterm-ghostty` terminfo | copied from ncurses-term's `ghostty` entry into `~/.terminfo` | — |
 | fnm | official installer → `~/.local/bin` | re-download the fnm release |
 | Node | latest LTS, through fnm | `fnm install --lts` |
 | pnpm | official standalone installer → `$PNPM_HOME/bin` | `pnpm self-update` |
