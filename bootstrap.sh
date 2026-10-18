@@ -35,8 +35,7 @@ SUMMARY=()
 REAL_DIRS=(.config .config/zsh)
 
 # Debian packages. Recommends stay on: git recommends less and openssh-client,
-# which minimal images may lack. ncurses-term has the xterm-ghostty terminfo
-# entry that Ghostty sends over SSH.
+# which minimal images may lack. ncurses-term has Ghostty's terminfo entry.
 APT_PACKAGES=(
   build-essential ca-certificates curl fd-find fzf gh git jq lazygit less nano
   ncurses-term openssh-client python3 python3-venv ripgrep stow unzip xz-utils zsh
@@ -311,6 +310,29 @@ link_fd() {
   ln -s /usr/bin/fdfind "$link"
   success "Linked $link to fdfind"
   record installed "fd (links to fdfind)"
+}
+
+# Ghostty sends TERM=xterm-ghostty over SSH, but ncurses-term names the entry
+# just ghostty, so programs on this machine wouldn't know the terminal. Compile
+# a copy under the name Ghostty uses into ~/.terminfo.
+install_ghostty_terminfo() {
+  info "Checking for the xterm-ghostty terminfo entry..."
+  if infocmp xterm-ghostty &>/dev/null; then
+    success "xterm-ghostty terminfo entry found"
+    record present "xterm-ghostty terminfo"
+    return
+  fi
+
+  if ! infocmp -x ghostty 2>/dev/null |
+    sed 's/^ghostty|/xterm-ghostty|/' |
+    tic -x -o "$HOME/.terminfo" - ||
+    ! infocmp xterm-ghostty &>/dev/null; then
+    error "Could not create the xterm-ghostty terminfo entry."
+    record failed "xterm-ghostty terminfo" "Over SSH from Ghostty, set TERM=xterm-256color instead"
+    return
+  fi
+  success "xterm-ghostty terminfo entry written to ~/.terminfo"
+  record installed "xterm-ghostty terminfo"
 }
 
 # Downloads an installer script to a file and runs it: a dropped connection
@@ -874,6 +896,7 @@ check_apt_packages() {
 check_user_tools() {
   info "User tools:"
   check_user_tool fd "has_command fd" "link ~/.local/bin/fd to fdfind"
+  check_user_tool "xterm-ghostty terminfo" "infocmp xterm-ghostty" "copy it from the ghostty entry"
   check_user_tool fnm "has_command fnm" "install it"
   check_user_tool pnpm pnpm_installed "install it"
   check_user_tool herdr herdr_installed "install it"
@@ -1121,6 +1144,7 @@ main() {
       install_apt_packages
       init_submodules
       link_fd
+      install_ghostty_terminfo
       install_fnm
       ;;
   esac
