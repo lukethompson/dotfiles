@@ -3,16 +3,10 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$XDG_CONFIG_HOME/local/share"
 export XDG_CACHE_HOME="$XDG_CONFIG_HOME/cache"
 
-# Editor. VS Code only at the Mac's own screen: over SSH it would open on a
-# display nobody is looking at. --wait keeps git from reading an empty message
-# while the file is still open.
-if [[ $OSTYPE == darwin* && -z $SSH_CONNECTION ]]; then
-  export EDITOR="code --wait"
-  export VISUAL="code --wait"
-else
-  export EDITOR="nano"
-  export VISUAL="nano"
-fi
+# Editor. nano for shells that never read .zshrc (zsh -c, ssh host cmd);
+# .zshrc switches interactive shells to VS Code when there is a screen for it.
+export EDITOR="nano"
+export VISUAL="nano"
 
 # zsh
 export ZDOTDIR="$XDG_CONFIG_HOME/zsh"

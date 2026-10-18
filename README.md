@@ -113,8 +113,9 @@ fnm exec -- node -v
 In a script, `eval "$(fnm env --use-on-cd)"` sets up the same switching as an interactive shell.
 
 ## Editor
-`git` and other tools that read `$VISUAL`/`$EDITOR` open `code --wait` at the Mac itself, and
-`nano` over SSH or on Debian. macOS's `crontab -e` can't run an editor with arguments, so use
+`git` and other tools that read `$VISUAL`/`$EDITOR` open `code --wait` when VS Code is installed
+and the shell is on a local screen (macOS, or a Linux desktop session), and `nano` over SSH or in
+shells that never read `.zshrc`, such as `zsh -c`. macOS's `crontab -e` can't run an editor with arguments, so use
 `EDITOR=nano crontab -e` there. Override `EDITOR`/`VISUAL` in `~/.config/zsh/.zshrc.local`.
 
 ## Local files

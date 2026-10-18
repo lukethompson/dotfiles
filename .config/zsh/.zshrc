@@ -10,6 +10,15 @@ prompt pure
 # Tools
 # =====================================
 
+# Editor - VS Code when it is installed and there is a screen to open it on:
+# not over SSH, and on Linux only in a graphical session. Checked here, not in
+# ~/.zshenv, because Homebrew's code is not on PATH until .zprofile. --wait
+# keeps git from reading an empty message while the file is still open.
+if (( $+commands[code] )) && [[ -z $SSH_CONNECTION ]] &&
+   [[ $OSTYPE == darwin* || -n $DISPLAY || -n $WAYLAND_DISPLAY ]]; then
+  export EDITOR="code --wait"
+  export VISUAL="code --wait"
+fi
 # fnm - Fast Node Manager
 if (( $+commands[fnm] )); then
   path=(${path:#*/fnm_multishells/*}) # drop inherited multishell dirs; fnm env adds a fresh one
