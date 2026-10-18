@@ -575,9 +575,10 @@ configure_login_shell() {
     return
   fi
 
+  # chsh asks for the account password, so it fails for an account without one.
   if ! chsh -s "$zsh_path"; then
     error "Could not change the login shell."
-    record failed "zsh login shell" "Change it with: chsh -s $zsh_path"
+    record failed "zsh login shell" "If the account has no password, change it with: sudo chsh -s $zsh_path $user"
     return
   fi
   success "Login shell changed to $zsh_path; it applies from the next login"
