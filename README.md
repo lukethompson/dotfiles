@@ -103,8 +103,8 @@ their auth stores between machines.
 ## Node for scripts and agents
 Interactive shells switch Node per directory (`fnm env --use-on-cd`). Every other zsh — `zsh -lc`,
 or a command run over SSH like `ssh host 'pnpm install'` — gets fnm's default Node and pnpm
-instead. A shell started from an already-running zsh inherits that shell's `PATH`. To
-run a command on the version a project's `.node-version` or `.nvmrc` asks for:
+instead. A non-login shell started from an already-running zsh (`zsh -c`) inherits that
+shell's `PATH`, including its per-directory Node. To run a command on the version a project's `.node-version` or `.nvmrc` asks for:
 
 ```bash
 fnm exec -- node -v
@@ -113,10 +113,12 @@ fnm exec -- node -v
 In a script, `eval "$(fnm env --use-on-cd)"` sets up the same switching as an interactive shell.
 
 ## Editor
-`git` and other tools that read `$VISUAL`/`$EDITOR` open `code --wait` when VS Code is installed
-and the shell is on a local screen (macOS, or a Linux desktop session), and `nano` over SSH or in
-shells that never read `.zshrc`, such as `zsh -c`. macOS's `crontab -e` can't run an editor with arguments, so use
-`EDITOR=nano crontab -e` there. Override `EDITOR`/`VISUAL` in `~/.config/zsh/.zshrc.local`.
+`git` and other tools that read `$VISUAL`/`$EDITOR` open VS Code (`--wait`) when it can show the
+file: in VS Code's or code-server's own terminal, even over SSH, where it opens in that window; or
+when VS Code is installed and the shell is on a local screen (macOS, or a Linux desktop session).
+Otherwise they open `nano`: over SSH, and in shells that never read `.zshrc`, such as `zsh -c`.
+macOS's `crontab -e` can't run an editor with arguments, so use `EDITOR=nano crontab -e` there.
+Override `EDITOR`/`VISUAL` in `~/.config/zsh/.zshrc.local`.
 
 ## Local files
 You can add untracked local files to provide some machine-specific customizations. Currently the following files are supported:
