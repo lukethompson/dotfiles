@@ -3,7 +3,8 @@
 # =====================================
 #  Shell
 # =====================================
-alias reload="exec $SHELL"
+# zsh, not $SHELL: on Debian the login shell may still be bash.
+alias reload="exec zsh"
 
 # =====================================
 #  ls
