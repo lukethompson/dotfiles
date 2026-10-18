@@ -43,13 +43,14 @@ offers to set a git identity and a GitHub SSH key. Upgrade with `brew upgrade`. 
 upgrades its own cask, because `.zshenv` sets `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`.
 
 ### Debian
-Asks for `sudo` once, only when packages are missing, and installs:
+Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry), and
+installs:
 
 | Tool | From | Update with |
 | --- | --- | --- |
 | zsh, git, gh, fzf, lazygit, ripgrep, fd, jq, stow, nano, build tools | apt (`APT_PACKAGES` in `bootstrap.sh`) | `sudo apt upgrade` |
-| `xterm-ghostty` terminfo | copied from ncurses-term's `ghostty` entry into `~/.terminfo` | — |
-| fnm | official installer → `~/.local/bin` | re-download the fnm release |
+| `xterm-ghostty` terminfo | copied from ncurses-term's `ghostty` entry into `/etc/terminfo` | — |
+| fnm | official installer → `~/.local/bin` | `curl -fsSL https://fnm.vercel.app/install \| bash -s -- --install-dir ~/.local/bin --skip-shell` |
 | Node | latest LTS, through fnm | `fnm install --lts` |
 | pnpm | official standalone installer → `$PNPM_HOME/bin` | `pnpm self-update` |
 | herdr | official installer → `~/.local/bin` | `herdr update` |
@@ -100,10 +101,10 @@ Agent CLIs (Claude Code, Codex, OpenCode, gh) are logged in separately on each m
 their auth stores between machines.
 
 ## Node for scripts and agents
-Interactive shells switch Node per directory (`fnm env --use-on-cd`). Login shells that skip
-`.zshrc`, like `zsh -lc`, get fnm's default Node instead; a command an agent runs through a
-non-login, non-interactive shell inherits whatever `PATH` the agent was started with. To run a command on
-the version a project's `.node-version` or `.nvmrc` asks for:
+Interactive shells switch Node per directory (`fnm env --use-on-cd`). Every other zsh — `zsh -lc`,
+or a command run over SSH like `ssh host 'pnpm install'` — gets fnm's default Node and pnpm
+instead. A shell started from an already-running zsh inherits that shell's `PATH`. To
+run a command on the version a project's `.node-version` or `.nvmrc` asks for:
 
 ```bash
 fnm exec -- node -v
@@ -112,8 +113,9 @@ fnm exec -- node -v
 In a script, `eval "$(fnm env --use-on-cd)"` sets up the same switching as an interactive shell.
 
 ## Editor
-`git`, `crontab -e` and friends open `code --wait` at the Mac itself, and `nano` over SSH or on
-Debian. Override `EDITOR`/`VISUAL` in `~/.config/zsh/.zshrc.local`.
+`git` and other tools that read `$VISUAL`/`$EDITOR` open `code --wait` at the Mac itself, and
+`nano` over SSH or on Debian. macOS's `crontab -e` can't run an editor with arguments, so use
+`EDITOR=nano crontab -e` there. Override `EDITOR`/`VISUAL` in `~/.config/zsh/.zshrc.local`.
 
 ## Local files
 You can add untracked local files to provide some machine-specific customizations. Currently the following files are supported:
