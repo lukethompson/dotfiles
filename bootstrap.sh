@@ -210,10 +210,16 @@ require_command_line_tools() {
 }
 
 init_submodules() {
+  local status="present"
+
   info "Fetching zsh plugins and prompt..."
+  # '-' means not initialised, '+' means on a different commit than recorded.
+  if git -C "$DOTFILES_DIR" submodule status | grep -q '^[-+]'; then
+    status="installed"
+  fi
   git -C "$DOTFILES_DIR" submodule update --init --recursive
   success "Submodules ready"
-  record installed "zsh plugins and prompt"
+  record "$status" "zsh plugins and prompt"
 }
 
 install_homebrew() {
