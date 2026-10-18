@@ -275,8 +275,10 @@ install_apt_packages() {
   # Unquoted on purpose: one argument per package, joined onto one line.
   # shellcheck disable=SC2086
   info "Installing Debian packages: $(echo $missing)"
-  # Asks for the password once, up front, and fails clearly without sudo.
-  if ! sudo -v; then
+  # Asks for the password once, up front, and fails clearly without sudo. Not
+  # sudo -v: that wants a password whenever any sudoers entry does, even if
+  # another grants NOPASSWD.
+  if ! sudo true; then
     error "Installing packages needs sudo. Get sudo access, then re-run this script."
     exit 1
   fi
@@ -980,7 +982,7 @@ check_stow_conflicts() {
 
   info "Files that would be backed up before symlinking:"
   if ! command -v stow &>/dev/null; then
-    echo "  stow is not installed; conflicts are checked once Homebrew installs it"
+    echo "  stow is not installed; conflicts are checked once a run installs it"
     return
   fi
 
