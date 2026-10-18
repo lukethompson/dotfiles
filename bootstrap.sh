@@ -163,7 +163,9 @@ detect_platform() {
     Linux)
       [ -r /etc/os-release ] || unsupported "Linux without /etc/os-release"
       # A subshell, so os-release's variables don't leak into this script.
+      # shellcheck source=/dev/null
       id="$(. /etc/os-release && echo "${ID:-}")"
+      # shellcheck source=/dev/null
       version_id="$(. /etc/os-release && echo "${VERSION_ID:-}")"
       [ "$id" = debian ] || unsupported "Linux distribution '${id:-unknown}'"
       # testing and sid have no VERSION_ID.
@@ -248,15 +250,17 @@ install_required_packages() {
   record installed "stow and fnm"
 }
 
-# Prints each package in APT_PACKAGES that isn't installed, one per line.
+# Prints the packages in APT_PACKAGES that aren't installed, space-separated.
 missing_apt_packages() {
   local package
+  local missing=""
 
   for package in "${APT_PACKAGES[@]}"; do
     if [ "$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null)" != installed ]; then
-      echo "$package"
+      missing="$missing $package"
     fi
   done
+  echo "${missing# }"
 }
 
 # Only touches apt when something is missing, so a re-run needs no password.
@@ -271,9 +275,7 @@ install_apt_packages() {
     return
   fi
 
-  # Unquoted on purpose: one argument per package, joined onto one line.
-  # shellcheck disable=SC2086
-  info "Installing Debian packages: $(echo $missing)"
+  info "Installing Debian packages: $missing"
   # Asks for the password once, up front, and fails clearly without sudo. Not
   # sudo -v: that wants a password whenever any sudoers entry does, even if
   # another grants NOPASSWD.
@@ -282,11 +284,11 @@ install_apt_packages() {
     exit 1
   fi
   sudo apt-get update
+  # Unquoted on purpose: one argument per package.
   # shellcheck disable=SC2086
   sudo apt-get install -y $missing
   success "Debian packages installed"
-  # shellcheck disable=SC2086
-  record installed "Debian packages" "$(echo $missing)"
+  record installed "Debian packages" "$missing"
 }
 
 # Debian ships fd as fdfind. A symlink, unlike an alias, also works for
@@ -889,8 +891,7 @@ check_apt_packages() {
     echo "  all installed"
     return
   fi
-  # shellcheck disable=SC2086
-  echo "  $(echo $missing | wc -w | tr -d ' ') to install: $(echo $missing)"
+  echo "  $(echo "$missing" | wc -w | tr -d ' ') to install: $missing"
 }
 
 check_user_tools() {
