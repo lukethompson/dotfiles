@@ -252,25 +252,25 @@ install_homebrew() {
 # Installs only what's missing: brew install upgrades an outdated formula.
 install_required_packages() {
   local package
-  local missing=()
+  local to_install=()
 
   info "Checking for stow and fnm..."
   for package in stow fnm; do
     if ! brew list --formula "$package" &>/dev/null; then
-      missing[${#missing[@]}]="$package"
+      to_install[${#to_install[@]}]="$package"
     fi
   done
 
-  if [ "${#missing[@]}" -eq 0 ]; then
+  if [ "${#to_install[@]}" -eq 0 ]; then
     success "stow and fnm are installed"
     record present "stow and fnm"
     return
   fi
 
-  info "Installing ${missing[*]}..."
-  brew install "${missing[@]}"
-  success "${missing[*]} installed"
-  record installed "${missing[*]}"
+  info "Installing ${to_install[*]}..."
+  brew install "${to_install[@]}"
+  success "${to_install[*]} installed"
+  record installed "${to_install[*]}"
 }
 
 # Prints the packages in APT_PACKAGES that aren't installed, space-separated.
