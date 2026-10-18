@@ -36,5 +36,7 @@ export PNPM_HOME="$XDG_DATA_HOME/pnpm"
 # Code run brew upgrade for its own cask. No effect on the native install.
 export CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE=1
 
-# Path
-export PATH="$HOME/.local/bin:$PATH"
+# Path. Set here so commands run over SSH (ssh host 'node -v'), which start a
+# shell that is neither login nor interactive, still find user tools, fnm's
+# default Node and pnpm. .zprofile re-adds them for login shells.
+path=("$HOME/.local/bin" "$FNM_DIR/aliases/default/bin" $path "$PNPM_HOME/bin")

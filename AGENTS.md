@@ -45,12 +45,14 @@ or window. Ghostty reloads its config with ⌘⇧,.
 ### Which zsh file
 
 - `.zshenv` — exports only: XDG paths, `ZDOTDIR`, `EDITOR`/`VISUAL` (VS Code on the Mac's own
-  screen, nano otherwise), history settings, `FNM_DIR`, `PNPM_HOME`, `~/.local/bin` on `PATH`. Zsh reads `$ZDOTDIR/.zshenv`, so a nested shell that inherits
-  `ZDOTDIR` skips it and relies on the inherited environment.
-- `.config/zsh/.zprofile` — login shells. Homebrew and other `PATH` additions: `~/.local/bin`
-  and fnm's default Node first, `$PNPM_HOME/bin` last.
-  `/etc/zprofile` runs `path_helper` after `.zshenv`, which moves `.zshenv`'s `PATH` entries
-  behind the system directories, so any entry that must come first is re-added here.
+  screen, nano otherwise), history settings, `FNM_DIR`, `PNPM_HOME`, and the user `PATH`:
+  `~/.local/bin` and fnm's default Node first, `$PNPM_HOME/bin` last. `PATH` lives here so
+  commands run over SSH (`ssh host cmd`, neither login nor interactive) find Node and pnpm.
+  Zsh reads `$ZDOTDIR/.zshenv`, so a nested shell that inherits `ZDOTDIR` skips it and relies
+  on the inherited environment.
+- `.config/zsh/.zprofile` — login shells. Homebrew, then the same `PATH` entries again:
+  on macOS `/etc/zprofile` runs `path_helper` after `.zshenv`, which moves `.zshenv`'s `PATH`
+  entries behind the system directories, so any entry that must come first is re-added here.
 - `.config/zsh/.zshrc` — interactive shells. Tools, aliases, completions, plugins. Guard every
   tool with `(( $+commands[tool] ))`: a fresh machine may not have it yet.
 - Aliases live in `.config/aliases/base`.

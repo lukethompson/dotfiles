@@ -8,13 +8,14 @@ if [[ -x /opt/homebrew/bin/brew ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
-# /etc/zprofile runs path_helper, which moves the ~/.local/bin that ~/.zshenv
-# prepended behind the system directories. Put it back in front; typeset -U
-# drops the later duplicate.
+# On macOS, /etc/zprofile runs path_helper, which moves the entries ~/.zshenv
+# prepended behind the system directories, and brew shellenv then puts
+# Homebrew ahead of them. Put them back in front; typeset -U drops the later
+# duplicate.
 #
-# fnm's default Node comes next, so login shells that never run .zshrc
-# (zsh -lc) still find node without fnm env. Interactive
-# shells put fnm env's per-shell version ahead of it.
+# fnm's default Node comes after ~/.local/bin, so login shells that never run
+# .zshrc (zsh -lc) find it ahead of Homebrew's node. Interactive shells put
+# fnm env's per-shell version ahead of it.
 path=("$HOME/.local/bin" ${FNM_DIR:+"$FNM_DIR/aliases/default/bin"} $path)
 
 # pnpm's global binaries go last, so a stale copy there never shadows the pnpm
