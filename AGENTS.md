@@ -1,15 +1,16 @@
 # dotfiles
 
-Personal macOS dotfiles, deployed as a GNU Stow symlink farm: zsh configuration, git config,
-Ghostty config, and a Homebrew package manifest.
+Personal dotfiles for Apple Silicon macOS and headless Debian 13+ (amd64, arm64), deployed as a
+GNU Stow symlink farm: zsh configuration, git config, Ghostty config, a Homebrew package manifest,
+and a Debian package list plus upstream installers in `bootstrap.sh`.
 
 ## Commands
 
 | Command | When |
 | --- | --- |
-| `./bootstrap.sh` | Full machine setup. Idempotent — safe to re-run. Installs missing packages but never upgrades them, since an upgrade quits running apps |
+| `./bootstrap.sh` | Full machine setup on either platform. Idempotent — safe to re-run. Installs missing packages but never upgrades them, since an upgrade quits running apps. Ends with a summary; exits 1 if any step failed |
 | `stow --dir=. --target="$HOME" --restow .` | After adding, moving, or renaming a stowed file — otherwise new files aren't linked and `$HOME` keeps stale symlinks |
-| `brew bundle --file=Brewfile` | Install packages after editing the Brewfile |
+| `brew bundle --file=Brewfile` | Install packages after editing the Brewfile (macOS) |
 | `git submodule update --init --recursive` | Fetch the zsh plugins and prompt |
 
 ## Verifying changes
@@ -20,8 +21,18 @@ There is no build or test suite. Check changes with:
 | --- | --- |
 | `./bootstrap.sh --check` | Reports what a run would change, changing nothing |
 | `bash -n bootstrap.sh` | Script syntax |
+| `zsh -n <file>` | Syntax of a changed zsh file |
+| `git diff --check` | Whitespace errors |
 | `stow --dir=. --target="$HOME" --restow --no .` | Dry run: lists conflicts without linking |
 | `ghostty +validate-config` | Ghostty config |
+
+Shell startup, without touching the live config: stow into a scratch home
+(`mkdir -p "$tmp/.config/zsh" && stow --dir=. --target="$tmp" .`), then run
+`env -i HOME="$tmp" TERM=xterm-256color zsh -lic exit` — once with the normal tools and once with
+`PATH=/usr/bin:/bin` — and expect no errors. Debian changes are verified in a throwaway OrbStack
+machine (`orb create debian:trixie`, `--arch amd64` for amd64) working on a `git clone` of the
+branch, never the Mac's repo through OrbStack's home mount. ShellCheck runs there
+(`sudo apt install shellcheck`).
 
 ## How deployment works
 
@@ -33,13 +44,15 @@ or window. Ghostty reloads its config with ⌘⇧,.
 
 ### Which zsh file
 
-- `.zshenv` — exports only: XDG paths, `ZDOTDIR`, `EDITOR`/`VISUAL`, history settings,
-  `~/.local/bin` on `PATH`. Zsh reads `$ZDOTDIR/.zshenv`, so a nested shell that inherits
+- `.zshenv` — exports only: XDG paths, `ZDOTDIR`, `EDITOR`/`VISUAL` (VS Code on the Mac's own
+  screen, nano otherwise), history settings, `FNM_DIR`, `PNPM_HOME`, `~/.local/bin` on `PATH`. Zsh reads `$ZDOTDIR/.zshenv`, so a nested shell that inherits
   `ZDOTDIR` skips it and relies on the inherited environment.
-- `.config/zsh/.zprofile` — login shells. Homebrew and other `PATH` additions.
+- `.config/zsh/.zprofile` — login shells. Homebrew and other `PATH` additions: `~/.local/bin`
+  and fnm's default Node first, `$PNPM_HOME/bin` last.
   `/etc/zprofile` runs `path_helper` after `.zshenv`, which moves `.zshenv`'s `PATH` entries
   behind the system directories, so any entry that must come first is re-added here.
-- `.config/zsh/.zshrc` — interactive shells. Tools, aliases, completions, plugins.
+- `.config/zsh/.zshrc` — interactive shells. Tools, aliases, completions, plugins. Guard every
+  tool with `(( $+commands[tool] ))`: a fresh machine may not have it yet.
 - Aliases live in `.config/aliases/base`.
 
 ## Conventions
@@ -47,7 +60,10 @@ or window. Ghostty reloads its config with ⌘⇧,.
 - Machine-specific values belong in untracked machine-local files, never in tracked config:
   `~/.config/aliases/local`, `~/.config/zsh/.zshrc.local`, `~/.gitconfig`
 - Shell scripts are bash with `set -euo pipefail`, reporting through the `info`/`success`/`error`
-  helpers in `bootstrap.sh`
+  helpers in `bootstrap.sh`. Every step also calls `record <installed|present|skipped|failed>`
+  for the end-of-run summary.
+- Platform-specific steps go in `main`'s and `run_check`'s `case "$PLATFORM"`. Tracked shell
+  config branches on `$OSTYPE` (`darwin*`), never on a command lookup.
 - Every `bootstrap.sh` step that changes the machine needs a matching `check_*` function in
   `run_check`. Check mode must stay read-only.
 - Brewfile: taps first, then `brew` and `cask` entries, each sorted by name (ignoring any tap
@@ -74,6 +90,12 @@ or window. Ghostty reloads its config with ⌘⇧,.
 - **Installers that append to `.zshrc` or `.zprofile` in `$ZDOTDIR` are editing the repo**, since
   both are symlinks into it. Review those changes before committing: guard any `source` of a
   file that only exists on this machine, or move the line into `~/.config/zsh/.zshrc.local`.
+  `bootstrap.sh` runs Debian's upstream installers through `run_installer`, which points
+  `ZDOTDIR` at a scratch dir, and fails the run if the repo changes anyway.
+- **Agent CLIs install differently per platform.** Homebrew on the Mac (Brewfile); official
+  installers on Debian, since `npm -g` installs would vanish when fnm switches Node. Never copy
+  auth stores (`~/.claude`, `~/.codex`, `~/.config/gh`) between machines.
+- **The Debian SSH config must not get `UseKeychain`.** Linux OpenSSH rejects the whole file.
 - `.config/zsh/plugins/*` and `.config/zsh/prompt` are git submodules. Do not edit their contents;
   update the submodule instead.
 - The git identity lives in the untracked `~/.gitconfig`, written by `bootstrap.sh`. Never
@@ -81,6 +103,9 @@ or window. Ghostty reloads its config with ⌘⇧,.
   without it, `git config --global` writes to the tracked `.config/git/config`.
 - `.zshenv` must stay at the repo root. Zsh reads it before `ZDOTDIR` is set, and it is the file
   that points zsh at `~/.config/zsh`.
-- Apple Silicon macOS only — `bootstrap.sh` exits early otherwise. Homebrew lives at
-  `/opt/homebrew`; scripts test for `/opt/homebrew/bin/brew` rather than `command -v brew`, since
-  brew isn't on `PATH` until `.zprofile` runs.
+- Apple Silicon macOS and Debian 13+ on amd64/arm64 only — `detect_platform` exits naming the
+  reason otherwise, and refuses root. On the Mac, Homebrew lives at `/opt/homebrew`; scripts test
+  for `/opt/homebrew/bin/brew` rather than `command -v brew`, since brew isn't on `PATH` until
+  `.zprofile` runs.
+- **Debian infrastructure is out of scope**: VM creation, sshd/mosh-server, Docker,
+  code-server, Caddy, backups, Ansible, WireGuard and Playwright belong in the separate infra repo.
