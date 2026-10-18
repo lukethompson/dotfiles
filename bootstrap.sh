@@ -9,24 +9,75 @@ RED='\033[0;31m'
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Same value .zshenv sets, which isn't linked yet on a fresh machine. brew trust
-# saves under this path, so without it later shells wouldn't see the trust.
+# Same values .zshenv sets, which isn't linked yet on a fresh machine. brew
+# trust saves under XDG_CONFIG_HOME, and fnm and pnpm install under
+# XDG_DATA_HOME, so without these later shells would look somewhere else.
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$XDG_CONFIG_HOME/local/share}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$XDG_CONFIG_HOME/cache}"
+export PNPM_HOME="${PNPM_HOME:-$XDG_DATA_HOME/pnpm}"
+
+# Installers put user tools here. Put it first so presence checks see them.
+export PATH="$HOME/.local/bin:$PATH"
 
 CHECK_MODE=false
-BUNDLE_FAILED=false
-SSH_KEY_CREATED=false
+PLATFORM=""
 STOW_CONFLICTS=()
 STOW_ERROR=""
+
+# One "status|name|hint" entry per step, printed at the end. Status is one of
+# installed, present, skipped or failed; any failure makes the run exit 1.
+SUMMARY=()
 
 # Directories apps write to at runtime (zsh history, compdump), relative to the
 # target. They must exist before stowing, or stow replaces each with a single
 # symlink and those writes land in the repo.
 REAL_DIRS=(.config .config/zsh)
 
+# Debian packages. Recommends stay on: git recommends less and openssh-client,
+# which minimal images may lack. ncurses-term has the xterm-ghostty terminfo
+# entry that Ghostty sends over SSH.
+APT_PACKAGES=(
+  build-essential ca-certificates curl fd-find fzf gh git jq lazygit less nano
+  ncurses-term openssh-client python3 python3-venv ripgrep stow unzip xz-utils zsh
+)
+
 info() { echo -e "${BLUE}$1${NOCOLOR}"; }
 success() { echo -e "${GREEN}$1${NOCOLOR}"; }
 error() { echo -e "${RED}$1${NOCOLOR}" >&2; }
+
+# record <installed|present|skipped|failed> <name> [hint]
+record() {
+  SUMMARY[${#SUMMARY[@]}]="$1|$2|${3:-}"
+}
+
+# Prints the summary and returns 1 if any step failed.
+print_summary() {
+  local entry
+  local status
+  local name
+  local hint
+  local failed=0
+
+  echo
+  info "Summary:"
+  for entry in "${SUMMARY[@]}"; do
+    status="${entry%%|*}"
+    entry="${entry#*|}"
+    name="${entry%%|*}"
+    hint="${entry#*|}"
+    if [ "$status" = failed ]; then
+      failed=1
+      echo -e "  ${RED}$(printf '%-9s' "$status")${NOCOLOR} $name"
+    else
+      printf '  %-9s %s\n' "$status" "$name"
+    fi
+    if [ -n "$hint" ]; then
+      printf '%s\n' "$hint" | sed 's/^/            /'
+    fi
+  done
+  return "$failed"
+}
 
 # Moves a path to a timestamped backup and prints the new path. The counter
 # stops two backups in the same second from overwriting each other.
@@ -85,10 +136,60 @@ detect_stow_conflicts_or_exit() {
   fi
 }
 
-require_apple_silicon_macos() {
-  if [ "$(uname -s)" != "Darwin" ] || [ "$(uname -m)" != "arm64" ]; then
-    error "These dotfiles only support Apple Silicon MacOS."
+unsupported() {
+  error "Unsupported system: $1"
+  error "These dotfiles support Apple Silicon macOS and Debian 13 or later on amd64 or arm64."
+  exit 1
+}
+
+# Sets PLATFORM to macos or debian, or exits naming what doesn't match.
+detect_platform() {
+  local os
+  local id=""
+  local version_id=""
+  local arch
+
+  if [ "$(id -u)" -eq 0 ]; then
+    error "Run this as your own user, not root. It asks for sudo when it needs it."
     exit 1
+  fi
+
+  os="$(uname -s)"
+  case "$os" in
+    Darwin)
+      arch="$(uname -m)"
+      [ "$arch" = arm64 ] || unsupported "macOS on $arch"
+      PLATFORM=macos
+      ;;
+    Linux)
+      [ -r /etc/os-release ] || unsupported "Linux without /etc/os-release"
+      # A subshell, so os-release's variables don't leak into this script.
+      id="$(. /etc/os-release && echo "${ID:-}")"
+      version_id="$(. /etc/os-release && echo "${VERSION_ID:-}")"
+      [ "$id" = debian ] || unsupported "Linux distribution '${id:-unknown}'"
+      # testing and sid have no VERSION_ID.
+      case "$version_id" in
+        '' | *[!0-9]*) unsupported "Debian without a numeric release (testing or sid?)" ;;
+      esac
+      [ "$version_id" -ge 13 ] || unsupported "Debian $version_id"
+      arch="$(dpkg --print-architecture)"
+      case "$arch" in
+        amd64 | arm64) ;;
+        *) unsupported "Debian on $arch" ;;
+      esac
+      PLATFORM=debian
+      ;;
+    *)
+      unsupported "$os"
+      ;;
+  esac
+
+  # Same per-platform value .zshenv sets, so Node installed here is the Node
+  # later shells find.
+  if [ "$PLATFORM" = macos ]; then
+    export FNM_DIR="${FNM_DIR:-$HOME/Library/Application Support/fnm}"
+  else
+    export FNM_DIR="${FNM_DIR:-$XDG_DATA_HOME/fnm}"
   fi
 }
 
@@ -98,6 +199,7 @@ require_command_line_tools() {
   info "Checking for Command Line Tools..."
   if xcode-select -p &>/dev/null; then
     success "Command Line Tools are installed"
+    record present "Command Line Tools"
     return
   fi
 
@@ -110,6 +212,7 @@ init_submodules() {
   info "Fetching zsh plugins and prompt..."
   git -C "$DOTFILES_DIR" submodule update --init --recursive
   success "Submodules ready"
+  record installed "zsh plugins and prompt"
 }
 
 install_homebrew() {
@@ -119,6 +222,7 @@ install_homebrew() {
   if [ -x /opt/homebrew/bin/brew ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     success "Homebrew is already installed"
+    record present Homebrew
     return
   fi
 
@@ -133,6 +237,7 @@ install_homebrew() {
   fi
 
   success "Homebrew installation complete"
+  record installed Homebrew
 }
 
 # stow links the dotfiles and fnm installs Node. Install them on their own so
@@ -141,6 +246,122 @@ install_required_packages() {
   info "Installing stow and fnm..."
   brew install stow fnm
   success "stow and fnm installed"
+  record installed "stow and fnm"
+}
+
+# Prints each package in APT_PACKAGES that isn't installed, one per line.
+missing_apt_packages() {
+  local package
+
+  for package in "${APT_PACKAGES[@]}"; do
+    if [ "$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null)" != installed ]; then
+      echo "$package"
+    fi
+  done
+}
+
+# Only touches apt when something is missing, so a re-run needs no password.
+install_apt_packages() {
+  local missing
+
+  info "Checking Debian packages..."
+  missing="$(missing_apt_packages)"
+  if [ -z "$missing" ]; then
+    success "Debian packages are installed"
+    record present "Debian packages"
+    return
+  fi
+
+  # Unquoted on purpose: one argument per package, joined onto one line.
+  # shellcheck disable=SC2086
+  info "Installing Debian packages: $(echo $missing)"
+  # Asks for the password once, up front, and fails clearly without sudo.
+  if ! sudo -v; then
+    error "Installing packages needs sudo. Get sudo access, then re-run this script."
+    exit 1
+  fi
+  sudo apt-get update
+  # shellcheck disable=SC2086
+  sudo apt-get install -y $missing
+  success "Debian packages installed"
+  # shellcheck disable=SC2086
+  record installed "Debian packages" "$(echo $missing)"
+}
+
+# Debian ships fd as fdfind. A symlink, unlike an alias, also works for
+# scripts and agents.
+link_fd() {
+  local link="$HOME/.local/bin/fd"
+
+  info "Checking for fd..."
+  if command -v fd &>/dev/null; then
+    success "fd is on PATH"
+    record present fd
+    return
+  fi
+
+  if [ -e "$link" ] || [ -L "$link" ]; then
+    error "$link exists but isn't a working fd, so it was left unchanged."
+    record skipped fd "$link exists but doesn't run; replace it with: ln -sf /usr/bin/fdfind $link"
+    return
+  fi
+
+  ln -s /usr/bin/fdfind "$link"
+  success "Linked $link to fdfind"
+  record installed "fd (links to fdfind)"
+}
+
+# Downloads an installer script to a file and runs it: a dropped connection
+# then can't run half a script. Installers like to add their directory to a
+# shell rc file. SHELL points them at zsh, and ZDOTDIR at a scratch dir: with
+# the real ZDOTDIR they'd edit .zshrc, which is a symlink into this repo. Any
+# file written there is reported and thrown away. Every tool ends up in
+# ~/.local/bin, already on PATH, so nothing is lost.
+# run_installer <url> <interpreter> [installer args...]
+run_installer() {
+  local url="$1"
+  local interpreter="$2"
+  shift 2
+  local script
+  local scratch
+  local status=0
+  local file
+
+  script="$(mktemp)"
+  scratch="$(mktemp -d)"
+
+  if curl -fsSL "$url" -o "$script"; then
+    SHELL="$(command -v zsh)" ZDOTDIR="$scratch" "$interpreter" "$script" "$@" || status=$?
+  else
+    error "Could not download $url"
+    status=1
+  fi
+
+  for file in "$scratch"/.[!.]* "$scratch"/*; do
+    [ -e "$file" ] || continue
+    info "Discarded the installer's edit to ${file##*/}; PATH is handled by the dotfiles."
+  done
+
+  rm -rf "$script" "$scratch"
+  return "$status"
+}
+
+# fnm is needed for Node, so a failure stops the run.
+install_fnm() {
+  info "Checking for fnm..."
+  if command -v fnm &>/dev/null; then
+    success "fnm is already installed"
+    record present fnm
+    return
+  fi
+
+  info "Installing fnm..."
+  if ! run_installer https://fnm.vercel.app/install bash --install-dir "$HOME/.local/bin" --skip-shell; then
+    error "fnm installation failed"
+    exit 1
+  fi
+  success "fnm installed"
+  record installed fnm
 }
 
 ensure_real_dirs() {
@@ -204,6 +425,7 @@ stow_dotfiles() {
   info "Symlinking dotfiles into $target..."
   stow --dir="$DOTFILES_DIR" --target="$target" --restow .
   success "Dotfiles symlinked"
+  record installed "dotfiles symlinks"
 }
 
 # The identity goes in ~/.gitconfig, which git reads after ~/.config/git/config.
@@ -221,11 +443,13 @@ configure_git_identity() {
 
   if [ -n "$git_name" ] && [ -n "$git_email" ]; then
     success "Git identity already configured ($git_email)"
+    record present "git identity"
     return
   fi
 
   if [ ! -t 0 ]; then
     echo "Not running interactively, skipping git identity setup"
+    record skipped "git identity" "Re-run ./bootstrap.sh in a terminal to set it"
     return
   fi
 
@@ -242,6 +466,47 @@ configure_git_identity() {
   git config --file "$gitconfig" user.email "$git_email"
 
   success "Git identity written to $gitconfig"
+  record installed "git identity"
+}
+
+# Debian only. Asks before changing it, since chsh asks for a password.
+configure_login_shell() {
+  local user
+  local current
+  local zsh_path
+  local reply
+
+  info "Checking login shell..."
+  user="$(id -un)"
+  zsh_path="$(command -v zsh)"
+  current="$(getent passwd "$user" | cut -d: -f7)"
+
+  if [ "${current##*/}" = zsh ]; then
+    success "Login shell is already zsh"
+    record present "zsh login shell"
+    return
+  fi
+
+  if [ ! -t 0 ]; then
+    echo "Not running interactively, leaving the login shell as $current"
+    record skipped "zsh login shell" "Change it with: chsh -s $zsh_path"
+    return
+  fi
+
+  read -r -p "Change your login shell from $current to $zsh_path? [y/N] " reply
+  if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+    echo "Leaving the login shell as $current"
+    record skipped "zsh login shell" "Change it with: chsh -s $zsh_path"
+    return
+  fi
+
+  if ! chsh -s "$zsh_path"; then
+    error "Could not change the login shell."
+    record failed "zsh login shell" "Change it with: chsh -s $zsh_path"
+    return
+  fi
+  success "Login shell changed to $zsh_path; it applies from the next login"
+  record installed "zsh login shell"
 }
 
 generate_github_ssh_key() {
@@ -251,17 +516,30 @@ generate_github_ssh_key() {
   info "Checking for existing GitHub SSH key..."
   if [ -f "$HOME/.ssh/github" ]; then
     success "GitHub SSH key already exists"
+    record present "GitHub SSH key"
+    return
+  fi
+
+  # ssh-keygen would overwrite it, and it may be registered somewhere.
+  if [ -e "$HOME/.ssh/github.pub" ]; then
+    error "$HOME/.ssh/github.pub exists without its private key, so no key was generated."
+    record skipped "GitHub SSH key" "Move ~/.ssh/github.pub aside, then re-run ./bootstrap.sh"
     return
   fi
 
   if [ ! -t 0 ]; then
     echo "Not running interactively, skipping GitHub SSH key generation"
+    record skipped "GitHub SSH key"
     return
   fi
 
+  if [ "$PLATFORM" = debian ]; then
+    echo "On this machine, git over HTTPS through gh is recommended instead; the summary shows how."
+  fi
   read -r -p "Generate a GitHub SSH key now? [y/N] " reply
   if [[ ! "$reply" =~ ^[Yy]$ ]]; then
     echo "Skipping GitHub SSH key generation"
+    record skipped "GitHub SSH key"
     return
   fi
 
@@ -281,14 +559,40 @@ generate_github_ssh_key() {
   ssh-keygen -t ed25519 -C "$github_email" -f "$HOME/.ssh/github"
 
   # Not fatal: the key is still usable, and AddKeysToAgent loads it on first use.
-  if ! ssh-add --apple-use-keychain "$HOME/.ssh/github"; then
-    error "Could not add the key to the agent; ssh will add it on first use."
-  fi
+  add_key_to_agent "$HOME/.ssh/github"
 
-  SSH_KEY_CREATED=true
   success "GitHub SSH key created. Copy the public key below, then add it at https://github.com/settings/ssh/new"
   echo
   cat "$HOME/.ssh/github.pub"
+
+  local copy_hint="cat ~/.ssh/github.pub"
+  if [ "$PLATFORM" = macos ]; then
+    copy_hint="pbcopy < ~/.ssh/github.pub"
+  fi
+  record installed "GitHub SSH key" "Add it at https://github.com/settings/ssh/new
+Copy it with: $copy_hint"
+}
+
+add_key_to_agent() {
+  local key="$1"
+  local status=0
+
+  if [ "$PLATFORM" = macos ]; then
+    if ! ssh-add --apple-use-keychain "$key"; then
+      error "Could not add the key to the agent; ssh will add it on first use."
+    fi
+    return
+  fi
+
+  # Exit 2 means no agent is reachable, common over SSH without forwarding.
+  ssh-add -l &>/dev/null || status=$?
+  if [ "$status" -eq 2 ]; then
+    echo "No ssh-agent is running, so ssh will ask for the passphrase each time the key is used."
+    return
+  fi
+  if ! ssh-add "$key"; then
+    error "Could not add the key to the agent; ssh will add it on first use."
+  fi
 }
 
 # Separate from key generation so a re-run still writes the block if an earlier
@@ -306,17 +610,28 @@ configure_github_ssh_host() {
   if ssh -G -F "$ssh_config" github.com </dev/null 2>/dev/null |
     grep -Eqx "identityfile (~|$HOME)/\.ssh/github"; then
     success "GitHub SSH config already uses ~/.ssh/github"
+    record present "GitHub SSH config"
     return
   fi
 
+  # UseKeychain is macOS-only; OpenSSH elsewhere rejects the whole file.
   local host_block
-  host_block="$(cat <<'EOF'
+  if [ "$PLATFORM" = macos ]; then
+    host_block="$(cat <<'EOF'
 Host github.com
   AddKeysToAgent yes
   UseKeychain yes
   IdentityFile ~/.ssh/github
 EOF
 )"
+  else
+    host_block="$(cat <<'EOF'
+Host github.com
+  AddKeysToAgent yes
+  IdentityFile ~/.ssh/github
+EOF
+)"
+  fi
 
   # ssh uses the first value it finds, so a block appended after an existing
   # github.com block would be ignored.
@@ -324,12 +639,14 @@ EOF
     error "$ssh_config already has a github.com Host block, so it was left unchanged."
     error "Make sure that block uses the new key, for example:"
     printf '%s\n' "$host_block" >&2
+    record skipped "GitHub SSH config" "$ssh_config already has a github.com block; point it at ~/.ssh/github"
     return
   fi
 
   printf '\n%s\n' "$host_block" >>"$ssh_config"
   chmod 600 "$ssh_config"
   success "GitHub SSH config written to $ssh_config"
+  record installed "GitHub SSH config"
 }
 
 # Not fatal: one failed entry (a cask download, a cancelled sudo prompt) fails
@@ -339,17 +656,103 @@ install_homebrew_packages() {
   # Homebrew won't load formulae from third-party taps until they're trusted.
   # Trusting by name works before the tap is added.
   if ! brew trust --formula anomalyco/tap/opencode-v2; then
-    BUNDLE_FAILED=true
     error "Could not trust anomalyco/tap/opencode-v2; brew bundle will fail to install it."
+    record failed "brew trust anomalyco/tap/opencode-v2"
   fi
   # --no-upgrade: a re-run only installs what's missing. Upgrading would quit
   # running apps to replace them; that's for `brew upgrade`.
   if ! brew bundle install --no-upgrade --file="$DOTFILES_DIR/Brewfile"; then
-    BUNDLE_FAILED=true
     error "Some Homebrew packages failed to install. Continuing with the remaining steps."
+    record failed "Homebrew packages" "Fix them, then re-run: brew bundle install --no-upgrade --file=\"$DOTFILES_DIR/Brewfile\""
     return
   fi
   success "Homebrew packages installation complete"
+  record installed "Homebrew packages"
+}
+
+pnpm_installed() { [ -x "$PNPM_HOME/bin/pnpm" ]; }
+
+# The standalone pnpm is its own executable, so it keeps working when fnm
+# switches Node. It installs to $PNPM_HOME/bin, which .zprofile adds to PATH.
+install_pnpm() {
+  run_installer https://get.pnpm.io/install.sh bash
+}
+
+install_herdr() {
+  HERDR_INSTALL_DIR="$HOME/.local/bin" run_installer https://herdr.dev/install.sh sh
+}
+
+# The native install updates itself. latest matches the Mac's claude-code@latest.
+install_claude() {
+  run_installer https://claude.ai/install.sh bash latest
+}
+
+install_codex() {
+  CODEX_NON_INTERACTIVE=1 run_installer https://chatgpt.com/codex/install.sh sh
+}
+
+# OpenCode installs to ~/.opencode/bin; a link puts it with the other tools.
+install_opencode() {
+  run_installer https://raw.githubusercontent.com/anomalyco/opencode/v2/install bash --no-modify-path &&
+    ln -s "$HOME/.opencode/bin/opencode" "$HOME/.local/bin/opencode"
+}
+
+# Not fatal: nothing later depends on these, so a failure is recorded and the
+# run carries on. Installs only what's missing, like brew bundle --no-upgrade.
+# install_user_tool <name> <command that succeeds when installed> <install command>
+install_user_tool() {
+  local name="$1"
+  local installed="$2"
+  local install="$3"
+
+  info "Checking for $name..."
+  if "$installed"; then
+    success "$name is already installed"
+    record present "$name"
+    return
+  fi
+
+  info "Installing $name..."
+  if "$install" && "$installed"; then
+    success "$name installed"
+    record installed "$name"
+  else
+    error "$name installation failed. Continuing with the remaining steps."
+    record failed "$name" "Re-run ./bootstrap.sh to retry"
+  fi
+}
+
+has_command() { command -v "$1" &>/dev/null; }
+herdr_installed() { has_command herdr; }
+claude_installed() { has_command claude; }
+codex_installed() { has_command codex; }
+opencode_installed() { has_command opencode; }
+
+install_user_tools() {
+  install_user_tool pnpm pnpm_installed install_pnpm
+  install_user_tool herdr herdr_installed install_herdr
+  install_user_tool "Claude Code" claude_installed install_claude
+  install_user_tool Codex codex_installed install_codex
+  install_user_tool OpenCode opencode_installed install_opencode
+}
+
+# Fingerprint of the repo's working tree, to catch an installer that edits a
+# tracked file through a symlink.
+repo_state() {
+  { git -C "$DOTFILES_DIR" status --porcelain; git -C "$DOTFILES_DIR" diff; } | cksum
+}
+
+# Never restores anything: the change may be wanted, so it's left for review.
+check_repo_unchanged() {
+  local before="$1"
+
+  if [ "$(repo_state)" = "$before" ]; then
+    return
+  fi
+
+  error "An installer changed files in $DOTFILES_DIR:"
+  git -C "$DOTFILES_DIR" status --short >&2
+  record failed "dotfiles repo left unchanged by installers" "Review with: git -C \"$DOTFILES_DIR\" diff"
 }
 
 install_node() {
@@ -358,6 +761,7 @@ install_node() {
 
   if fnm current &>/dev/null && [ "$(fnm current)" != "none" ]; then
     success "Node is already installed ($(fnm current))"
+    record present "Node $(fnm current)"
     return
   fi
 
@@ -366,6 +770,18 @@ install_node() {
   fnm default lts-latest
   fnm use lts-latest
   success "Node installation complete ($(node --version))"
+  record installed "Node $(node --version)"
+}
+
+# Debian only. Logging in stays a manual, interactive step.
+check_github_cli_login() {
+  if gh auth status &>/dev/null; then
+    record present "GitHub CLI login"
+    return
+  fi
+  record skipped "GitHub CLI login" "Log in, then let git use it over HTTPS:
+gh auth login --git-protocol https
+gh auth setup-git"
 }
 
 # Homebrew won't install tap formulae with outdated Command Line Tools, and a
@@ -402,6 +818,10 @@ check_submodules() {
   local stale
 
   info "Submodules:"
+  if ! command -v git &>/dev/null; then
+    echo "  git is not installed; a run installs it, then fetches them"
+    return
+  fi
   status="$(git -C "$DOTFILES_DIR" submodule status)"
 
   # '-' means not initialised, '+' means on a different commit than recorded.
@@ -434,6 +854,88 @@ check_homebrew_packages() {
   missing="$(printf '%s\n' "$output" | grep -c 'needs to be installed' || true)"
   echo "  $missing to install"
   printf '%s\n' "$output" | grep 'needs to be installed' | sed 's/^/  /' || true
+}
+
+check_apt_packages() {
+  local missing
+
+  info "Debian packages:"
+  missing="$(missing_apt_packages)"
+  if [ -z "$missing" ]; then
+    echo "  all installed"
+    return
+  fi
+  # shellcheck disable=SC2086
+  echo "  $(echo $missing | wc -w | tr -d ' ') to install: $(echo $missing)"
+}
+
+check_user_tools() {
+  info "User tools:"
+  check_user_tool fd "has_command fd" "link ~/.local/bin/fd to fdfind"
+  check_user_tool fnm "has_command fnm" "install it"
+  check_user_tool pnpm pnpm_installed "install it"
+  check_user_tool herdr herdr_installed "install it"
+  check_user_tool "Claude Code" claude_installed "install it"
+  check_user_tool Codex codex_installed "install it"
+  check_user_tool OpenCode opencode_installed "install it"
+}
+
+# check_user_tool <name> <check command> <what a run would do>
+check_user_tool() {
+  # Unquoted so "has_command fd" splits into a command and its argument.
+  # shellcheck disable=SC2086
+  if $2 &>/dev/null; then
+    echo "  $1: installed"
+  else
+    echo "  $1: a run would $3"
+  fi
+}
+
+check_login_shell() {
+  local current
+
+  info "Login shell:"
+  current="$(getent passwd "$(id -un)" | cut -d: -f7)"
+  if [ "${current##*/}" = zsh ]; then
+    echo "  zsh"
+  else
+    echo "  $current; a run would offer to change it to zsh"
+  fi
+}
+
+check_github_cli() {
+  info "GitHub CLI login:"
+  if ! command -v gh &>/dev/null; then
+    echo "  gh is not installed"
+  elif gh auth status &>/dev/null; then
+    echo "  logged in"
+  else
+    echo "  not logged in; run: gh auth login --git-protocol https && gh auth setup-git"
+  fi
+}
+
+# .zprofile puts $PNPM_HOME/bin last on PATH, so a global binary there loses to
+# a same-named command anywhere earlier. List those, since they never run.
+check_pnpm_shadowing() {
+  local file
+  local name
+  local found
+  local shadowed=false
+
+  info "pnpm global binaries:"
+  for file in "$PNPM_HOME"/bin/*; do
+    [ -e "$file" ] || continue
+    name="${file##*/}"
+    found="$(command -v "$name" 2>/dev/null || true)"
+    if [ -n "$found" ] && [ "$found" != "$file" ]; then
+      echo "  $name: shadowed by $found"
+      shadowed=true
+    fi
+  done
+
+  if [ "$shadowed" = false ]; then
+    echo "  none shadowed"
+  fi
 }
 
 check_node() {
@@ -511,6 +1013,8 @@ check_prompts() {
 
   if [ -f "$target/.ssh/github" ]; then
     echo "  GitHub SSH key: already exists"
+  elif [ -e "$target/.ssh/github.pub" ]; then
+    echo "  GitHub SSH key: ~/.ssh/github.pub exists without its private key; a run would skip it"
   else
     echo "  GitHub SSH key: would prompt to generate one"
   fi
@@ -523,19 +1027,36 @@ run_check() {
   info "Check mode: reporting what a run would change, changing nothing."
   echo
 
-  # Puts brew, stow and fnm on PATH for every check below. Only changes this
-  # process's environment.
-  if [ -x /opt/homebrew/bin/brew ]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  fi
+  case "$PLATFORM" in
+    macos)
+      # Puts brew, stow and fnm on PATH for every check below. Only changes
+      # this process's environment.
+      if [ -x /opt/homebrew/bin/brew ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+      fi
 
-  check_command_line_tools
-  echo
-  check_submodules
-  echo
-  check_homebrew_packages
+      check_command_line_tools
+      echo
+      check_submodules
+      echo
+      check_homebrew_packages
+      ;;
+    debian)
+      check_apt_packages
+      echo
+      check_submodules
+      echo
+      check_user_tools
+      echo
+      check_login_shell
+      echo
+      check_github_cli
+      ;;
+  esac
   echo
   check_node
+  echo
+  check_pnpm_shadowing
   echo
   check_real_dirs "$target"
   echo
@@ -574,37 +1095,63 @@ parse_args() {
 }
 
 main() {
+  local repo_before
+
   parse_args "$@"
-  require_apple_silicon_macos
+  detect_platform
 
   if [ "$CHECK_MODE" = true ]; then
     run_check
     exit 0
   fi
 
-  require_command_line_tools
-  init_submodules
-  install_homebrew
-  install_required_packages
+  # Installers write here; it must be a real directory, never a stow link.
+  mkdir -p "$HOME/.local/bin"
+
+  case "$PLATFORM" in
+    macos)
+      require_command_line_tools
+      init_submodules
+      install_homebrew
+      install_required_packages
+      ;;
+    debian)
+      install_apt_packages
+      init_submodules
+      link_fd
+      install_fnm
+      ;;
+  esac
+
   stow_dotfiles
   configure_git_identity
+  if [ "$PLATFORM" = debian ]; then
+    configure_login_shell
+  fi
   generate_github_ssh_key
   configure_github_ssh_host
-  install_homebrew_packages
+
+  repo_before="$(repo_state)"
+  case "$PLATFORM" in
+    macos) install_homebrew_packages ;;
+    debian) install_user_tools ;;
+  esac
+  check_repo_unchanged "$repo_before"
+
   install_node
 
-  # The key was printed before brew bundle, so it has likely scrolled away.
-  if [ "$SSH_KEY_CREATED" = true ]; then
-    info "Remember to add your SSH key at https://github.com/settings/ssh/new"
-    info "Copy it with: pbcopy < ~/.ssh/github.pub"
+  if [ "$PLATFORM" = debian ]; then
+    check_github_cli_login
   fi
 
-  if [ "$BUNDLE_FAILED" = true ]; then
-    error "Bootstrap finished, but some Homebrew packages failed to install."
-    error "Fix them, then re-run: brew bundle install --no-upgrade --file=\"$DOTFILES_DIR/Brewfile\""
+  # Printed last: the SSH key and any errors have likely scrolled away.
+  if ! print_summary; then
+    echo
+    error "Bootstrap finished, but some steps failed. See the summary above."
     exit 1
   fi
 
+  echo
   success "Bootstrap complete! Please reload your terminal."
 }
 
