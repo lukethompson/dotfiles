@@ -38,22 +38,25 @@ branch, never the Mac's repo through OrbStack's home mount. ShellCheck runs ther
 
 `stow` symlinks the repo into `$HOME` — `.config/` becomes `~/.config`, `.zshenv` becomes
 `~/.zshenv`. Tracked files *are* the live config, with no install step. A running shell doesn't
-re-read them. `reload` (`exec $SHELL`) re-reads `.zshrc` and the aliases only: it starts a
+re-read them. `reload` (`exec zsh`) re-reads `.zshrc` and the aliases only: it starts a
 non-login shell that inherits `ZDOTDIR`, so changes to `.zshenv` or `.zprofile` need a new tab
 or window. Ghostty reloads its config with ⌘⇧,.
 
 ### Which zsh file
 
-- `.zshenv` — exports only: XDG paths, `ZDOTDIR`, `EDITOR`/`VISUAL` (nano), history settings, `FNM_DIR`, `PNPM_HOME`, and the user `PATH`:
-  `~/.local/bin` and fnm's default Node first, `$PNPM_HOME/bin` last. `PATH` lives here so
-  commands run over SSH (`ssh host cmd`, neither login nor interactive) find Node and pnpm.
-  Zsh reads `$ZDOTDIR/.zshenv`, so a nested shell that inherits `ZDOTDIR` skips it and relies
-  on the inherited environment.
+- `.zshenv` — environment only: XDG paths, `ZDOTDIR`, `EDITOR`/`VISUAL` (nano), history
+  settings, `skip_global_compinit`, `FNM_DIR`, `PNPM_HOME`,
+  `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`, and the user `PATH`: `~/.local/bin` and fnm's
+  default Node first, `$PNPM_HOME/bin` last. `PATH` lives here so commands run over SSH
+  (`ssh host cmd`, neither login nor interactive) find Node and pnpm. Zsh reads
+  `$ZDOTDIR/.zshenv`, so a nested shell that inherits `ZDOTDIR` skips it and relies on the
+  inherited environment.
 - `.config/zsh/.zprofile` — login shells. Homebrew, then the same `PATH` entries again:
   on macOS `/etc/zprofile` runs `path_helper` after `.zshenv`, which moves `.zshenv`'s `PATH`
   entries behind the system directories, so any entry that must come first is re-added here.
-- `.config/zsh/.zshrc` — interactive shells. Editor (VS Code when `code` is on `PATH`, outside
-  SSH, and on Linux in a graphical session), tools, aliases, completions, plugins. Guard every
+- `.config/zsh/.zshrc` — interactive shells. Editor (VS Code in VS Code's or code-server's
+  terminal, or when `code` is on `PATH`, outside SSH, and on Linux in a graphical session),
+  tools, aliases, completions, plugins. Guard every
   tool with `(( $+commands[tool] ))`: a fresh machine may not have it yet.
 - Aliases live in `.config/aliases/base`.
 
@@ -65,7 +68,8 @@ or window. Ghostty reloads its config with ⌘⇧,.
   helpers in `bootstrap.sh`. Every step also calls `record <installed|present|skipped|failed>`
   for the end-of-run summary.
 - Platform-specific steps go in `main`'s and `run_check`'s `case "$PLATFORM"`. Tracked shell
-  config branches on `$OSTYPE` (`darwin*`), never on a command lookup.
+  config tells the platforms apart by `$OSTYPE` (`darwin*`), never by whether a command
+  exists; command lookups are for tool guards only.
 - Every `bootstrap.sh` step that changes the machine needs a matching `check_*` function in
   `run_check`. Check mode must stay read-only.
 - Brewfile: taps first, then `brew` and `cask` entries, each sorted by name (ignoring any tap
