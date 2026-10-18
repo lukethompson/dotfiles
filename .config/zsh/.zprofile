@@ -23,4 +23,6 @@ path=("$HOME/.local/bin" ${FNM_DIR:+"$FNM_DIR/aliases/default/bin"} $path)
 path+=(${PNPM_HOME:+"$PNPM_HOME/bin"})
 
 # OrbStack - command-line tools and integration
-source ~/.orbstack/shell/init.zsh 2>/dev/null || :
+if [[ -r ~/.orbstack/shell/init.zsh ]]; then
+  source ~/.orbstack/shell/init.zsh
+fi
