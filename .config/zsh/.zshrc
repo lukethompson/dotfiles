@@ -10,10 +10,9 @@ prompt pure
 # Tools
 # =====================================
 
-# Editor - VS Code when it is installed and there is a screen to open it on:
-# not over SSH, and on Linux only in a graphical session. Checked here, not in
-# ~/.zshenv, because Homebrew's code is not on PATH until .zprofile. --wait
-# keeps git from reading an empty message while the file is still open.
+# Editor - VS Code if installed, outside SSH, and on Linux only in a desktop
+# session. Checked here because Homebrew's code isn't on PATH in ~/.zshenv.
+# --wait makes git wait for the file to be closed.
 if (( $+commands[code] )) && [[ -z $SSH_CONNECTION ]] &&
    [[ $OSTYPE == darwin* || -n $DISPLAY || -n $WAYLAND_DISPLAY ]]; then
   export EDITOR="code --wait"

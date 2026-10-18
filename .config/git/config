@@ -1,2 +1,2 @@
 ; Identity lives in the untracked ~/.gitconfig, written by bootstrap.sh.
-; No core.editor: git falls back to $VISUAL/$EDITOR, set by ~/.zshenv and .zshrc.
+; No core.editor, so git uses $VISUAL/$EDITOR from ~/.zshenv and .zshrc.

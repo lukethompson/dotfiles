@@ -10,8 +10,8 @@ fpath=($ZDOTDIR/plugins/zsh-completions/src $fpath)
 # Ensure completions directory exists
 mkdir -p $ZDOTDIR/completions
 
-# Generated completions are cached here. Each is written only when its tool is
-# installed, and regenerated if an earlier attempt left the file empty.
+# Generated completions are cached here, written only if the tool is installed
+# and regenerated if empty.
 fpath+=($ZDOTDIR/completions)
 
 # fnm completions

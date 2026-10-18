@@ -9,15 +9,14 @@ RED='\033[0;31m'
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Same values .zshenv sets, which isn't linked yet on a fresh machine. brew
-# trust saves under XDG_CONFIG_HOME, and fnm and pnpm install under
-# XDG_DATA_HOME, so without these later shells would look somewhere else.
+# Same values .zshenv sets, which isn't linked yet on a fresh machine, so what
+# this script installs (brew trust, Node, pnpm) is where later shells look.
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$XDG_CONFIG_HOME/local/share}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$XDG_CONFIG_HOME/cache}"
 export PNPM_HOME="${PNPM_HOME:-$XDG_DATA_HOME/pnpm}"
 
-# Installers put user tools here. Put it first so presence checks see them.
+# So presence checks find tools already installed there.
 export PATH="$HOME/.local/bin:$PATH"
 
 CHECK_MODE=false
@@ -34,8 +33,7 @@ SUMMARY=()
 # symlink and those writes land in the repo.
 REAL_DIRS=(.config .config/zsh)
 
-# Debian packages. Recommends stay on: git recommends less and openssh-client,
-# which minimal images may lack. ncurses-term has Ghostty's terminfo entry.
+# Debian packages. ncurses-term has Ghostty's terminfo entry.
 APT_PACKAGES=(
   build-essential ca-certificates curl fd-find fzf gh git jq lazygit less nano
   ncurses-term openssh-client python3 python3-venv ripgrep stow unzip xz-utils zsh
@@ -249,7 +247,7 @@ install_homebrew() {
 
 # stow links the dotfiles and fnm installs Node. Install them on their own so
 # a failed Brewfile entry can't leave either one missing.
-# Installs only what's missing: brew install upgrades an outdated formula.
+# Installs only what's missing, since brew install also upgrades.
 install_required_packages() {
   local package
   local to_install=()
@@ -299,9 +297,8 @@ install_apt_packages() {
   fi
 
   info "Installing Debian packages: $missing"
-  # Asks for the password once, up front, and fails clearly without sudo. Not
-  # sudo -v: that wants a password whenever any sudoers entry does, even if
-  # another grants NOPASSWD.
+  # Asks for the password up front and stops if the user can't sudo. Not
+  # sudo -v: it asks for a password unless every sudoers entry is NOPASSWD.
   if ! sudo true; then
     error "Installing packages needs sudo. Get sudo access, then re-run this script."
     exit 1
@@ -337,16 +334,15 @@ link_fd() {
   record installed "fd (links to fdfind)"
 }
 
-# Whether the entry is in a system directory. HOME and TERMINFO are cleared so
-# a copy in ~/.terminfo doesn't count: root, under sudo, can't see that one.
+# Whether the entry is in a system directory. A copy in ~/.terminfo doesn't
+# count, since root can't see it under sudo.
 ghostty_terminfo_installed() {
   env -u TERMINFO -u TERMINFO_DIRS HOME=/nonexistent infocmp xterm-ghostty &>/dev/null
 }
 
-# Ghostty sends TERM=xterm-ghostty over SSH, but ncurses-term names the entry
-# just ghostty, so programs on this machine wouldn't know the terminal. Compile
-# a copy under the name Ghostty uses into /etc/terminfo, Debian's directory
-# for local entries, so sudo nano and sudo -i work too.
+# Ghostty sends TERM=xterm-ghostty over SSH, but ncurses-term calls the entry
+# ghostty. Copy it under Ghostty's name into /etc/terminfo, Debian's directory
+# for local entries, so it works under sudo too.
 install_ghostty_terminfo() {
   info "Checking for the xterm-ghostty terminfo entry..."
   if ghostty_terminfo_installed; then
@@ -367,12 +363,11 @@ install_ghostty_terminfo() {
   record installed "xterm-ghostty terminfo"
 }
 
-# Downloads an installer script to a file and runs it: a dropped connection
-# then can't run half a script. Installers like to add their directory to a
-# shell rc file. SHELL points them at zsh, and ZDOTDIR at a scratch dir: with
-# the real ZDOTDIR they'd edit .zshrc, which is a symlink into this repo. Any
-# file written there is reported and thrown away. Every tool ends up in
-# ~/.local/bin, already on PATH, so nothing is lost.
+# Downloads an installer to a file before running it, so a dropped connection
+# can't run half a script. Installers add their directory to a shell rc file;
+# ZDOTDIR points them at a scratch dir, since the real .zshrc is a symlink into
+# this repo. Their edits are reported and discarded: PATH already covers where
+# each tool installs.
 # run_installer <url> <interpreter> [installer args...]
 run_installer() {
   local url="$1"
@@ -752,8 +747,8 @@ install_homebrew_packages() {
 
 pnpm_installed() { [ -x "$PNPM_HOME/bin/pnpm" ]; }
 
-# The standalone pnpm is its own executable, so it keeps working when fnm
-# switches Node. It installs to $PNPM_HOME/bin, which .zprofile adds to PATH.
+# The standalone pnpm bundles its own Node, so it keeps working when fnm
+# switches version. It installs to $PNPM_HOME/bin, which is on PATH.
 install_pnpm() {
   run_installer https://get.pnpm.io/install.sh bash
 }
@@ -771,9 +766,8 @@ install_codex() {
   CODEX_NON_INTERACTIVE=1 run_installer https://chatgpt.com/codex/install.sh sh
 }
 
-# OpenCode installs to ~/.opencode/bin; a link puts it with the other tools.
-# Only runs when opencode isn't on PATH, so an existing link is broken (say,
-# ~/.opencode was deleted) and is replaced. A real file there is left alone.
+# OpenCode installs to ~/.opencode/bin; link it into ~/.local/bin. This only
+# runs when opencode isn't on PATH, so any existing link is broken.
 install_opencode() {
   local link="$HOME/.local/bin/opencode"
 
@@ -1001,8 +995,8 @@ check_github_cli() {
   fi
 }
 
-# .zprofile puts $PNPM_HOME/bin last on PATH, so a global binary there loses to
-# a same-named command anywhere earlier. List those, since they never run.
+# $PNPM_HOME/bin is last on PATH, so a global binary there never runs if
+# another command has the same name. List those.
 check_pnpm_shadowing() {
   local file
   local name
@@ -1116,8 +1110,7 @@ run_check() {
 
   case "$PLATFORM" in
     macos)
-      # Puts brew, stow and fnm on PATH for every check below. Only changes
-      # this process's environment.
+      # Put brew, stow and fnm on PATH for the checks below (this process only).
       if [ -x /opt/homebrew/bin/brew ]; then
         eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
@@ -1232,7 +1225,7 @@ main() {
     check_github_cli_login
   fi
 
-  # Printed last: the SSH key and any errors have likely scrolled away.
+  # Last, since the SSH key and any errors have likely scrolled away.
   if ! print_summary; then
     echo
     error "Bootstrap finished, but some steps failed. See the summary above."
