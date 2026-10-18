@@ -249,11 +249,28 @@ install_homebrew() {
 
 # stow links the dotfiles and fnm installs Node. Install them on their own so
 # a failed Brewfile entry can't leave either one missing.
+# Installs only what's missing: brew install upgrades an outdated formula.
 install_required_packages() {
-  info "Installing stow and fnm..."
-  brew install stow fnm
-  success "stow and fnm installed"
-  record installed "stow and fnm"
+  local package
+  local missing=()
+
+  info "Checking for stow and fnm..."
+  for package in stow fnm; do
+    if ! brew list --formula "$package" &>/dev/null; then
+      missing[${#missing[@]}]="$package"
+    fi
+  done
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    success "stow and fnm are installed"
+    record present "stow and fnm"
+    return
+  fi
+
+  info "Installing ${missing[*]}..."
+  brew install "${missing[@]}"
+  success "${missing[*]} installed"
+  record installed "${missing[*]}"
 }
 
 # Prints the packages in APT_PACKAGES that aren't installed, space-separated.
@@ -320,12 +337,19 @@ link_fd() {
   record installed "fd (links to fdfind)"
 }
 
+# Whether the entry is in a system directory. HOME and TERMINFO are cleared so
+# a copy in ~/.terminfo doesn't count: root, under sudo, can't see that one.
+ghostty_terminfo_installed() {
+  env -u TERMINFO -u TERMINFO_DIRS HOME=/nonexistent infocmp xterm-ghostty &>/dev/null
+}
+
 # Ghostty sends TERM=xterm-ghostty over SSH, but ncurses-term names the entry
 # just ghostty, so programs on this machine wouldn't know the terminal. Compile
-# a copy under the name Ghostty uses into ~/.terminfo.
+# a copy under the name Ghostty uses into /etc/terminfo, Debian's directory
+# for local entries, so sudo nano and sudo -i work too.
 install_ghostty_terminfo() {
   info "Checking for the xterm-ghostty terminfo entry..."
-  if infocmp xterm-ghostty &>/dev/null; then
+  if ghostty_terminfo_installed; then
     success "xterm-ghostty terminfo entry found"
     record present "xterm-ghostty terminfo"
     return
@@ -333,13 +357,13 @@ install_ghostty_terminfo() {
 
   if ! infocmp -x ghostty 2>/dev/null |
     sed 's/^ghostty|/xterm-ghostty|/' |
-    tic -x -o "$HOME/.terminfo" - ||
-    ! infocmp xterm-ghostty &>/dev/null; then
+    sudo tic -x -o /etc/terminfo - ||
+    ! ghostty_terminfo_installed; then
     error "Could not create the xterm-ghostty terminfo entry."
     record failed "xterm-ghostty terminfo" "Over SSH from Ghostty, set TERM=xterm-256color instead"
     return
   fi
-  success "xterm-ghostty terminfo entry written to ~/.terminfo"
+  success "xterm-ghostty terminfo entry written to /etc/terminfo"
   record installed "xterm-ghostty terminfo"
 }
 
@@ -448,16 +472,40 @@ resolve_stow_conflicts() {
   fi
 }
 
+# Whether a restow would change anything. On an up-to-date target the dry run
+# unlinks every link and relinks it, marking each relink "(reverts previous
+# action)"; any other action, or a failed dry run (a conflict), is a change.
+stow_would_change() {
+  local target="$1"
+  local output
+  local unlinks
+  local relinks
+
+  if ! output="$(stow --dir="$DOTFILES_DIR" --target="$target" --restow --no -v . 2>&1)"; then
+    return 0
+  fi
+  if printf '%s\n' "$output" | grep -E '^[A-Z]+: ' | grep -Ev '^(UNLINK|WARNING): |^LINK: .*\(reverts previous action\)$' | grep -q .; then
+    return 0
+  fi
+  unlinks="$(printf '%s\n' "$output" | grep -c '^UNLINK: ' || true)"
+  relinks="$(printf '%s\n' "$output" | grep -c '^LINK: .*(reverts previous action)$' || true)"
+  [ "$unlinks" -ne "$relinks" ]
+}
+
 stow_dotfiles() {
   local target="${1:-$HOME}"
+  local status=present
 
   ensure_real_dirs "$target"
+  if stow_would_change "$target"; then
+    status=installed
+  fi
   resolve_stow_conflicts "$target"
 
   info "Symlinking dotfiles into $target..."
   stow --dir="$DOTFILES_DIR" --target="$target" --restow .
   success "Dotfiles symlinked"
-  record installed "dotfiles symlinks"
+  record "$status" "dotfiles symlinks"
 }
 
 # The identity goes in ~/.gitconfig, which git reads after ~/.config/git/config.
@@ -724,9 +772,16 @@ install_codex() {
 }
 
 # OpenCode installs to ~/.opencode/bin; a link puts it with the other tools.
+# Only runs when opencode isn't on PATH, so an existing link is broken (say,
+# ~/.opencode was deleted) and is replaced. A real file there is left alone.
 install_opencode() {
-  run_installer https://raw.githubusercontent.com/anomalyco/opencode/v2/install bash --no-modify-path &&
-    ln -s "$HOME/.opencode/bin/opencode" "$HOME/.local/bin/opencode"
+  local link="$HOME/.local/bin/opencode"
+
+  run_installer https://raw.githubusercontent.com/anomalyco/opencode/v2/install bash --no-modify-path || return
+  if [ -L "$link" ]; then
+    rm "$link"
+  fi
+  ln -s "$HOME/.opencode/bin/opencode" "$link"
 }
 
 # Not fatal: nothing later depends on these, so a failure is recorded and the
@@ -903,7 +958,7 @@ check_apt_packages() {
 check_user_tools() {
   info "User tools:"
   check_user_tool fd "has_command fd" "link ~/.local/bin/fd to fdfind"
-  check_user_tool "xterm-ghostty terminfo" "infocmp xterm-ghostty" "copy it from the ghostty entry"
+  check_user_tool "xterm-ghostty terminfo" ghostty_terminfo_installed "copy it from the ghostty entry into /etc/terminfo"
   check_user_tool fnm "has_command fnm" "install it"
   check_user_tool pnpm pnpm_installed "install it"
   check_user_tool herdr herdr_installed "install it"
