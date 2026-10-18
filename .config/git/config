@@ -1,3 +1,2 @@
-[core]
-	editor = code
 ; Identity lives in the untracked ~/.gitconfig, written by bootstrap.sh.
+; No core.editor: git falls back to $VISUAL/$EDITOR, set per machine in ~/.zshenv.
