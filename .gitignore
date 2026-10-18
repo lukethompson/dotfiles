@@ -1,5 +1,3 @@
-.DS_STORE
-
 # Machine-local aliases. Lands here because ~/.config/aliases is a folded
 # symlink into this repo.
 .config/aliases/local
