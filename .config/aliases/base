@@ -8,4 +8,8 @@ alias reload="exec $SHELL"
 # =====================================
 #  ls
 # =====================================
-alias ls="ls -G"
+if [[ $OSTYPE == darwin* ]]; then
+  alias ls="ls -G"
+else
+  alias ls="ls --color=auto"
+fi

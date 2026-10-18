@@ -11,10 +11,14 @@ prompt pure
 # =====================================
 
 # fnm - Fast Node Manager
-path=(${path:#*/fnm_multishells/*}) # drop inherited multishell dirs; fnm env adds a fresh one
-eval "$(fnm env --use-on-cd --shell zsh)"
+if (( $+commands[fnm] )); then
+  path=(${path:#*/fnm_multishells/*}) # drop inherited multishell dirs; fnm env adds a fresh one
+  eval "$(fnm env --use-on-cd --shell zsh)"
+fi
 # fzf - command line fuzzy finder
-source <(fzf --zsh)
+if (( $+commands[fzf] )); then
+  source <(fzf --zsh)
+fi
 
 # =====================================
 # Aliases

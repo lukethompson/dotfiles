@@ -10,9 +10,14 @@ fpath=($ZDOTDIR/plugins/zsh-completions/src $fpath)
 # Ensure completions directory exists
 mkdir -p $ZDOTDIR/completions
 
+# Generated completions are cached here. Each is written only when its tool is
+# installed, and regenerated if an earlier attempt left the file empty.
+fpath+=($ZDOTDIR/completions)
+
 # fnm completions
-[ ! -f "$ZDOTDIR/completions/_fnm" ] && fnm completions --shell=zsh > $ZDOTDIR/completions/_fnm
-fpath+="$ZDOTDIR/completions/_fnm"
+if (( $+commands[fnm] )) && [[ ! -s $ZDOTDIR/completions/_fnm ]]; then
+  fnm completions --shell=zsh >| $ZDOTDIR/completions/_fnm
+fi
 
 # Load and initialize zsh completions
 autoload -Uz compinit; compinit
@@ -58,13 +63,19 @@ zstyle ':completion:*:*:-command-:*:*' group-order aliases builtins functions co
 
 # Improve completion hosts
 zstyle ':completion:*' use-ip true
-zstyle ':completion:*:(ssh|scp|rsync):*' hosts \
-    $(awk '{print $1}' ~/.ssh/known_hosts | cut -d, -f1 | sort -u)
+if [[ -r ~/.ssh/known_hosts ]]; then
+  zstyle ':completion:*:(ssh|scp|rsync):*' hosts \
+      $(awk '{print $1}' ~/.ssh/known_hosts | cut -d, -f1 | sort -u)
+fi
 
 # =====================================
 # Additional
 # =====================================
 
 # pnpm completions – must be sourced after compinit
-[ ! -f "$ZDOTDIR/completions/_pnpm" ] && pnpm completion zsh > $ZDOTDIR/completions/_pnpm
-source $ZDOTDIR/completions/_pnpm
+if (( $+commands[pnpm] )) && [[ ! -s $ZDOTDIR/completions/_pnpm ]]; then
+  pnpm completion zsh >| $ZDOTDIR/completions/_pnpm
+fi
+if [[ -s $ZDOTDIR/completions/_pnpm ]]; then
+  source $ZDOTDIR/completions/_pnpm
+fi
