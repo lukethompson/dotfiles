@@ -1,4 +1,17 @@
 # =====================================
+# Environment
+# =====================================
+
+# VS Code as the editor if installed, outside SSH, and on Linux only in a
+# desktop session. Checked here because Homebrew's code isn't on PATH in
+# ~/.zshenv. --wait makes git wait for the file to be closed.
+if (( $+commands[code] )) && [[ -z $SSH_CONNECTION ]] &&
+   [[ $OSTYPE == darwin* || -n $DISPLAY || -n $WAYLAND_DISPLAY ]]; then
+  export EDITOR="code --wait"
+  export VISUAL="code --wait"
+fi
+
+# =====================================
 # Prompt
 # =====================================
 
@@ -10,14 +23,6 @@ prompt pure
 # Tools
 # =====================================
 
-# Editor - VS Code if installed, outside SSH, and on Linux only in a desktop
-# session. Checked here because Homebrew's code isn't on PATH in ~/.zshenv.
-# --wait makes git wait for the file to be closed.
-if (( $+commands[code] )) && [[ -z $SSH_CONNECTION ]] &&
-   [[ $OSTYPE == darwin* || -n $DISPLAY || -n $WAYLAND_DISPLAY ]]; then
-  export EDITOR="code --wait"
-  export VISUAL="code --wait"
-fi
 # fnm - Fast Node Manager
 if (( $+commands[fnm] )); then
   path=(${path:#*/fnm_multishells/*}) # drop inherited multishell dirs; fnm env adds a fresh one
