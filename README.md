@@ -59,31 +59,6 @@ login shell), and installs:
 | Codex | official standalone installer → `~/.local/bin` | re-run the installer |
 | OpenCode v2 | official installer → `~/.opencode/bin`, linked into `~/.local/bin` | re-run the installer |
 
-## GitHub access
-
-`bootstrap.sh` offers to create `~/.ssh/github` and add a `github.com` block to `~/.ssh/config`.
-On the Mac, the macOS keychain holds the passphrase. On Debian, each new zsh session shares one
-`ssh-agent`, so the passphrase is asked once per boot, on the first push. Every machine gets its
-own key; never copy the Mac's private key to another machine.
-
-If the GitHub CLI isn't logged in, `bootstrap.sh` then offers to run
-`gh auth login --git-protocol ssh`, which logs in through the browser and asks before uploading
-the new public key.
-
-An existing `github.com` block in `~/.ssh/config` and an existing
-`~/.ssh/github.pub` are reported and left alone. Nothing trusts GitHub's host key for you: on
-first connection, check it against
-[GitHub's published fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints):
-
-```text
-SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU (Ed25519)
-SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWu3/LiyKgUfQM (ECDSA)
-SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s (RSA)
-```
-
-Agent CLIs (Claude Code, Codex, OpenCode, gh) are logged in separately on each machine. Never copy
-their auth stores between machines.
-
 ## Local files
 You can add untracked local files to provide some machine-specific customizations. Currently the following files are supported:
 - `~/.config/aliases/local`
