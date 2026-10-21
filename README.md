@@ -15,7 +15,7 @@ My personal dotfiles for macOS and a headless Debian dev machine.
 
 ## Supported systems
 - Apple Silicon macOS
-- Debian 13 or later on amd64 or arm64, used headless over SSH or Mosh. Testing and sid are refused.
+- Debian 13 or later on amd64 or arm64
 
 ## Installation
 
