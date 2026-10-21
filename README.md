@@ -22,26 +22,25 @@ My personal dotfiles, built mainly for macOS, with support for a slimmed-down De
 ```bash
 # Debian only: a fresh install has no git yet
 sudo apt install git
-# Clone the repository into your home directory
+# Clone the repository
 git clone https://github.com/lukethompson/dotfiles.git
 cd dotfiles
+# Optional: see what a run would change first
+./bootstrap.sh --check
 # Bootstrap the machine
 ./bootstrap.sh
-# Report what a run would change, changing nothing
-./bootstrap.sh --check
 ```
 
 `bootstrap.sh` is idempotent — it skips anything already installed, so it is safe to
-re-run. It doesn't upgrade installed packages. It ends with a summary of every step, and exits
-non-zero if any step failed.
+re-run. It doesn't upgrade installed packages. On both platforms it links the dotfiles and offers
+to set a git identity, a GitHub SSH key and the GitHub CLI login. It ends with a summary of every
+step, and exits non-zero if any step failed.
 
 Run it as your own user, not root.
 
 ### macOS
-Installs the Command Line Tools, Homebrew, the Brewfile and Node, links the dotfiles, and
-offers to set a git identity, a GitHub SSH key and the GitHub CLI login. Upgrade with
-`brew upgrade`. Claude Code upgrades its own cask, because `.zshenv` sets
-`CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`.
+Installs the Command Line Tools, Homebrew, the Brewfile and Node. Upgrade with `brew upgrade`;
+Claude Code updates itself.
 
 ### Debian
 Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry, the
@@ -60,7 +59,8 @@ login shell), and installs:
 | OpenCode v2 | official installer → `~/.opencode/bin`, linked into `~/.local/bin` | re-run the installer |
 
 ## Local files
-You can add untracked local files to provide some machine-specific customizations. Currently the following files are supported:
+You can add untracked local files to provide some machine-specific customizations. Currently the
+following files are supported:
 - `~/.config/aliases/local`
 - `~/.config/zsh/.zshrc.local`
 - `~/.gitconfig` — your git identity, written by `bootstrap.sh`
