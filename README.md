@@ -67,22 +67,18 @@ changes a file in this repo anyway.
 
 ## GitHub access
 
-**On the Mac**, `bootstrap.sh` offers to create `~/.ssh/github` and add a `github.com` block to
-`~/.ssh/config`, using the macOS keychain.
+`bootstrap.sh` offers to create `~/.ssh/github` and add a `github.com` block to `~/.ssh/config`.
+On the Mac, the macOS keychain holds the passphrase. On Debian, each new zsh session shares one
+`ssh-agent`, so the passphrase is asked once per boot, on the first push. Every machine gets its
+own key; never copy the Mac's private key to another machine.
 
-**On Debian**, use HTTPS through the GitHub CLI instead. Logging in stays a manual step:
+Log in to the GitHub CLI by hand. It can upload the new public key for you:
 
 ```bash
-gh auth login --git-protocol https
-gh auth setup-git   # writes the credential helper to the untracked ~/.gitconfig
+gh auth login --git-protocol ssh
 ```
 
-On a headless machine with no keyring, gh stores the token unencrypted in
-`~/.config/gh/hosts.yml`. Revoke it with `gh auth logout`, or at
-<https://github.com/settings/applications>. The SSH key prompt still exists on Debian, defaulting
-to no; never copy the Mac's private key there.
-
-On both systems, an existing `github.com` block in `~/.ssh/config` and an existing
+An existing `github.com` block in `~/.ssh/config` and an existing
 `~/.ssh/github.pub` are reported and left alone. Nothing trusts GitHub's host key for you: on
 first connection, check it against
 [GitHub's published fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints):

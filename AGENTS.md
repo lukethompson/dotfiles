@@ -55,8 +55,8 @@ or window. Ghostty reloads its config with ⌘⇧,.
   on macOS `/etc/zprofile` runs `path_helper` after `.zshenv`, which moves `.zshenv`'s `PATH`
   entries behind the system directories, so any entry that must come first is re-added here.
 - `.config/zsh/.zshrc` — interactive shells. Editor (VS Code in VS Code's or code-server's
-  terminal, or when `code` is on `PATH`, outside SSH, and on Linux in a graphical session),
-  tools, aliases, completions, plugins. Guard every
+  terminal, or when `code` is on `PATH`, outside SSH, and on Linux in a graphical session), a
+  shared `ssh-agent` on Linux, tools, aliases, completions, plugins. Guard every
   tool with `(( $+commands[tool] ))`: a fresh machine may not have it yet.
 - Aliases live in `.config/aliases/base`.
 
