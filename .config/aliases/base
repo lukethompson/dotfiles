@@ -14,3 +14,12 @@ if [[ $OSTYPE == darwin* ]]; then
 else
   alias ls="ls --color=auto"
 fi
+
+# =====================================
+#  crontab
+# =====================================
+# macOS's crontab -e runs $EDITOR as a single program name, so the
+# "code --wait" set in .zshrc fails with "No such file or directory".
+if [[ $OSTYPE == darwin* ]]; then
+  alias crontab="EDITOR=nano VISUAL=nano crontab"
+fi
