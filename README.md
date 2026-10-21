@@ -96,18 +96,6 @@ SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s (RSA)
 Agent CLIs (Claude Code, Codex, OpenCode, gh) are logged in separately on each machine. Never copy
 their auth stores between machines.
 
-## Node for scripts and agents
-Interactive shells switch Node per directory (`fnm env --use-on-cd`). Every other zsh — `zsh -lc`,
-or a command run over SSH like `ssh host 'pnpm install'` — gets fnm's default Node and pnpm
-instead. A non-login shell started from an already-running zsh (`zsh -c`) inherits that
-shell's `PATH`, including its per-directory Node. To run a command on the version a project's `.node-version` or `.nvmrc` asks for:
-
-```bash
-fnm exec -- node -v
-```
-
-In a script, `eval "$(fnm env --use-on-cd)"` sets up the same switching as an interactive shell.
-
 ## Local files
 You can add untracked local files to provide some machine-specific customizations. Currently the following files are supported:
 - `~/.config/aliases/local`
