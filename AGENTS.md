@@ -113,5 +113,3 @@ or window. Ghostty reloads its config with ⌘⇧,.
   reason otherwise, and refuses root. On the Mac, Homebrew lives at `/opt/homebrew`; scripts test
   for `/opt/homebrew/bin/brew` rather than `command -v brew`, since brew isn't on `PATH` until
   `.zprofile` runs.
-- **Debian infrastructure is out of scope**: VM creation, sshd/mosh-server, Docker,
-  code-server, Caddy, backups, Ansible, WireGuard and Playwright belong in the separate infra repo.
