@@ -101,6 +101,9 @@ or window. Ghostty reloads its config with ⌘⇧,.
 - **Agent CLIs install differently per platform.** Homebrew on the Mac (Brewfile); official
   installers on Debian, since `npm -g` installs would vanish when fnm switches Node. Never copy
   auth stores (`~/.claude`, `~/.codex`, `~/.config/gh`) between machines.
+- **Docker on Debian is rootless**, from Docker's apt repo (the only third-party repo). Never add
+  the user to the `docker` group: it is root-equivalent. The root daemon the packages start is
+  disabled on purpose.
 - **The Debian SSH config must not get `UseKeychain`.** Linux OpenSSH rejects the whole file.
 - `.config/zsh/plugins/*` and `.config/zsh/prompt` are git submodules. Do not edit their contents;
   update the submodule instead.

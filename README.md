@@ -44,11 +44,12 @@ Claude Code updates itself.
 
 ### Debian
 Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry, the
-login shell), and installs:
+login shell, the Docker setup), and installs:
 
 | Tool | From | Update with |
 | --- | --- | --- |
 | zsh, git, gh, fzf, lazygit, ripgrep, fd, jq, stow, nano, build tools | apt (`APT_PACKAGES` in `bootstrap.sh`) | `sudo apt upgrade` |
+| Docker Engine, Compose, buildx | Docker's apt repo, run rootless | `sudo apt upgrade` |
 | `xterm-ghostty` terminfo | copied from ncurses-term's `ghostty` entry into `/etc/terminfo` | — |
 | fnm | official installer → `~/.local/bin` | `curl -fsSL https://fnm.vercel.app/install \| bash -s -- --install-dir ~/.local/bin --skip-shell` |
 | Node | latest LTS, through fnm | `fnm install --lts` |
@@ -57,6 +58,9 @@ login shell), and installs:
 | Claude Code | native installer, latest channel | updates itself |
 | Codex | official standalone installer → `~/.local/bin` | re-run the installer |
 | OpenCode v2 | official installer → `~/.opencode/bin`, linked into `~/.local/bin` | re-run the installer |
+
+Docker runs rootless: the daemon runs as you, so `docker` and `docker compose` need no `sudo`, and
+you're never added to the root-equivalent `docker` group.
 
 ## Local files
 You can add untracked local files to provide some machine-specific customizations. Currently the
