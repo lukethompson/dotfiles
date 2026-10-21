@@ -121,9 +121,3 @@ You can add untracked local files to provide some machine-specific customization
 - `~/.config/aliases/local`
 - `~/.config/zsh/.zshrc.local`
 - `~/.gitconfig` — your git identity, written by `bootstrap.sh`
-
-## One-time clean-up on an existing Mac
-Left over from earlier pnpm setups and not removed by `bootstrap.sh`: the stale
-`~/.config/local/share/pnpm/claude` shim and the old `~/Library/pnpm` directory. Check that
-nothing still uses them, then delete them by hand. `./bootstrap.sh --check` lists any pnpm global
-binary that another command on `PATH` shadows.
