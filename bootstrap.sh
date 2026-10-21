@@ -609,9 +609,6 @@ generate_github_ssh_key() {
     return
   fi
 
-  if [ "$PLATFORM" = debian ]; then
-    echo "On this machine, git over HTTPS through gh is recommended instead; the summary shows how."
-  fi
   read -r -p "Generate a GitHub SSH key now? [y/N] " reply
   if [[ ! "$reply" =~ ^[Yy]$ ]]; then
     echo "Skipping GitHub SSH key generation"
@@ -660,10 +657,11 @@ add_key_to_agent() {
     return
   fi
 
-  # Exit 2 means no agent is reachable, common over SSH without forwarding.
+  # Exit 2 means no agent is reachable. .zshrc starts one in each new zsh session,
+  # and AddKeysToAgent loads the key into it on first use.
   ssh-add -l &>/dev/null || status=$?
   if [ "$status" -eq 2 ]; then
-    echo "No ssh-agent is running, so ssh will ask for the passphrase each time the key is used."
+    echo "No ssh-agent is running yet; the key is added on first use in a new zsh session."
     return
   fi
   if ! ssh-add "$key"; then
@@ -855,17 +853,6 @@ install_node() {
   record installed "Node $(node --version)"
 }
 
-# Debian only. Logging in stays a manual, interactive step.
-check_github_cli_login() {
-  if gh auth status &>/dev/null; then
-    record present "GitHub CLI login"
-    return
-  fi
-  record skipped "GitHub CLI login" "Log in, then let git use it over HTTPS:
-gh auth login --git-protocol https
-gh auth setup-git"
-}
-
 # Homebrew won't install tap formulae with outdated Command Line Tools, and a
 # run doesn't update them, so flag it here rather than midway through bundle.
 check_command_line_tools() {
@@ -982,17 +969,6 @@ check_login_shell() {
     echo "  zsh"
   else
     echo "  $current; a run would offer to change it to zsh"
-  fi
-}
-
-check_github_cli() {
-  info "GitHub CLI login:"
-  if ! command -v gh &>/dev/null; then
-    echo "  gh is not installed"
-  elif gh auth status &>/dev/null; then
-    echo "  logged in"
-  else
-    echo "  not logged in; run: gh auth login --git-protocol https && gh auth setup-git"
   fi
 }
 
@@ -1130,8 +1106,6 @@ run_check() {
       check_user_tools
       echo
       check_login_shell
-      echo
-      check_github_cli
       ;;
   esac
   echo
@@ -1221,10 +1195,6 @@ main() {
   check_repo_unchanged "$repo_before"
 
   install_node
-
-  if [ "$PLATFORM" = debian ]; then
-    check_github_cli_login
-  fi
 
   # Last, since the SSH key and any errors have likely scrolled away.
   if ! print_summary; then
