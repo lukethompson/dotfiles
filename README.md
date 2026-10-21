@@ -65,10 +65,6 @@ changes a file in this repo anyway.
 
 `bootstrap.sh` also offers to change your login shell to zsh (`chsh`).
 
-Not handled here, and kept in a separate infrastructure repo: creating the VM, sshd and
-mosh-server, Docker, code-server, Caddy, backups, Ansible, WireGuard, locale and timezone, and
-Playwright browsers.
-
 ## GitHub access
 
 **On the Mac**, `bootstrap.sh` offers to create `~/.ssh/github` and add a `github.com` block to
