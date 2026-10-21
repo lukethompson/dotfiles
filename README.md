@@ -44,8 +44,8 @@ offers to set a git identity, a GitHub SSH key and the GitHub CLI login. Upgrade
 `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`.
 
 ### Debian
-Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry), and
-installs:
+Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry, the
+login shell), and installs:
 
 | Tool | From | Update with |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ the same trust model as the Homebrew installer. Each runs with its shell-config 
 a scratch directory, since `PATH` is handled by these dotfiles; bootstrap fails if an installer
 changes a file in this repo anyway.
 
-`bootstrap.sh` also offers to change your login shell to zsh (`chsh`).
+`bootstrap.sh` also changes your login shell to zsh (`sudo chsh`).
 
 ## GitHub access
 
