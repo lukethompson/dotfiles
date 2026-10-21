@@ -1,8 +1,8 @@
 # dotfiles
 
-Personal dotfiles for Apple Silicon macOS and headless Debian 13+ (amd64, arm64), deployed as a
-GNU Stow symlink farm: zsh configuration, git config, Ghostty config, a Homebrew package manifest,
-and a Debian package list plus upstream installers in `bootstrap.sh`.
+Personal dotfiles for Apple Silicon macOS and Debian 13+ (amd64, arm64), deployed as a GNU Stow
+symlink farm: zsh configuration, git config, Ghostty config, a Homebrew package manifest, and a
+Debian package list plus upstream installers in `bootstrap.sh`.
 
 ## Commands
 
