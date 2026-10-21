@@ -486,10 +486,10 @@ setup_rootless_docker() {
 
   if rootful_docker_enabled; then
     info "Stopping the root Docker daemon..."
-    if ! sudo systemctl disable --now docker.service docker.socket ||
+    if ! sudo systemctl disable --now docker.socket docker.service ||
       ! sudo rm -f /var/run/docker.sock; then
       error "Could not stop the root Docker daemon."
-      record failed "rootless Docker" "Stop it with: sudo systemctl disable --now docker.service docker.socket"
+      record failed "rootless Docker" "Stop it with: sudo systemctl disable --now docker.socket docker.service"
       return
     fi
     status=installed
