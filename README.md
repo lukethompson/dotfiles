@@ -59,13 +59,6 @@ login shell), and installs:
 | Codex | official standalone installer → `~/.local/bin` | re-run the installer |
 | OpenCode v2 | official installer → `~/.opencode/bin`, linked into `~/.local/bin` | re-run the installer |
 
-The upstream tools come from their official install scripts at their latest release, unpinned —
-the same trust model as the Homebrew installer. Each runs with its shell-config edits redirected to
-a scratch directory, since `PATH` is handled by these dotfiles; bootstrap fails if an installer
-changes a file in this repo anyway.
-
-`bootstrap.sh` also changes your login shell to zsh (`sudo chsh`).
-
 ## GitHub access
 
 `bootstrap.sh` offers to create `~/.ssh/github` and add a `github.com` block to `~/.ssh/config`.
