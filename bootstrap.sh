@@ -39,6 +39,17 @@ APT_PACKAGES=(
   ncurses-term openssh-client python3 python3-venv ripgrep stow unzip xz-utils zsh
 )
 
+# Docker from Docker's own apt repo, since Debian's docker.io lags upstream
+# support. The last three are Debian's, needed to run it rootless.
+DOCKER_PACKAGES=(
+  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  docker-ce-rootless-extras dbus-user-session slirp4netns uidmap
+)
+# Debian packages Docker's replace. apt-get -y would remove them silently.
+DOCKER_CONFLICTS=(docker.io docker-compose docker-doc docker-buildx podman-docker containerd runc)
+DOCKER_SOURCES=/etc/apt/sources.list.d/docker.sources
+DOCKER_KEY=/etc/apt/keyrings/docker.asc
+
 info() { echo -e "${BLUE}$1${NOCOLOR}"; }
 success() { echo -e "${GREEN}$1${NOCOLOR}"; }
 error() { echo -e "${RED}$1${NOCOLOR}" >&2; }
@@ -271,17 +282,32 @@ install_required_packages() {
   record installed "${to_install[*]}"
 }
 
-# Prints the packages in APT_PACKAGES that aren't installed, space-separated.
+apt_package_installed() {
+  [ "$(dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null)" = installed ]
+}
+
+# Prints the given packages that aren't installed, space-separated.
 missing_apt_packages() {
   local package
   local missing=""
 
-  for package in "${APT_PACKAGES[@]}"; do
-    if [ "$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null)" != installed ]; then
-      missing="$missing $package"
-    fi
+  for package in "$@"; do
+    apt_package_installed "$package" || missing="$missing $package"
   done
   echo "${missing# }"
+}
+
+# Prints the given packages that are installed, space-separated.
+installed_apt_packages() {
+  local package
+  local installed=""
+
+  for package in "$@"; do
+    if apt_package_installed "$package"; then
+      installed="$installed $package"
+    fi
+  done
+  echo "${installed# }"
 }
 
 # Only touches apt when something is missing, so a re-run needs no password.
@@ -289,7 +315,7 @@ install_apt_packages() {
   local missing
 
   info "Checking Debian packages..."
-  missing="$(missing_apt_packages)"
+  missing="$(missing_apt_packages "${APT_PACKAGES[@]}")"
   if [ -z "$missing" ]; then
     success "Debian packages are installed"
     record present "Debian packages"
@@ -361,6 +387,140 @@ install_ghostty_terminfo() {
   fi
   success "xterm-ghostty terminfo entry written to /etc/terminfo"
   record installed "xterm-ghostty terminfo"
+}
+
+# The signing key and a deb822 sources file, as in Docker's install guide.
+add_docker_repo() {
+  local key
+  local codename
+  local arch
+  local status=0
+
+  key="$(mktemp)"
+  # A subshell, so os-release's variables don't leak into this script.
+  # shellcheck source=/dev/null
+  codename="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
+  arch="$(dpkg --print-architecture)"
+
+  if curl -fsSL https://download.docker.com/linux/debian/gpg -o "$key" &&
+    sudo install -m 0755 -d /etc/apt/keyrings &&
+    sudo install -m 0644 "$key" "$DOCKER_KEY"; then
+    printf '%s\n' \
+      "Types: deb" \
+      "URIs: https://download.docker.com/linux/debian" \
+      "Suites: $codename" \
+      "Components: stable" \
+      "Architectures: $arch" \
+      "Signed-By: $DOCKER_KEY" |
+      sudo tee "$DOCKER_SOURCES" >/dev/null || status=$?
+  else
+    status=1
+  fi
+  rm -f "$key"
+  return "$status"
+}
+
+# Not fatal: nothing later needs Docker, so a failure is recorded and the run
+# carries on.
+install_docker() {
+  local conflicts
+  local missing
+
+  info "Checking Docker..."
+  conflicts="$(installed_apt_packages "${DOCKER_CONFLICTS[@]}")"
+  if [ -n "$conflicts" ]; then
+    error "Debian's Docker packages are installed ($conflicts), which Docker's own packages replace."
+    record failed Docker "Remove them with: sudo apt remove $conflicts, then re-run ./bootstrap.sh"
+    return
+  fi
+
+  missing="$(missing_apt_packages "${DOCKER_PACKAGES[@]}")"
+  if [ -z "$missing" ]; then
+    success "Docker packages are installed"
+    record present "Docker packages"
+  else
+    info "Installing Docker packages: $missing"
+    if [ ! -f "$DOCKER_SOURCES" ] && ! add_docker_repo; then
+      error "Could not add Docker's apt repo."
+      record failed "Docker packages" "Re-run ./bootstrap.sh to retry"
+      return
+    fi
+    # Unquoted on purpose: one argument per package.
+    # shellcheck disable=SC2086
+    if ! sudo apt-get update || ! sudo apt-get install -y $missing; then
+      error "Docker packages failed to install. Continuing with the remaining steps."
+      record failed "Docker packages" "Re-run ./bootstrap.sh to retry"
+      return
+    fi
+    success "Docker packages installed"
+    record installed "Docker packages" "$missing"
+  fi
+
+  setup_rootless_docker
+}
+
+# Whether the root daemon the packages start is enabled or running.
+rootful_docker_enabled() {
+  systemctl is-enabled --quiet docker.service docker.socket 2>/dev/null ||
+    systemctl is-active --quiet docker.service docker.socket 2>/dev/null
+}
+
+rootless_docker_enabled() {
+  systemctl --user is-enabled --quiet docker.service 2>/dev/null
+}
+
+linger_enabled() {
+  [ "$(loginctl show-user "$(id -un)" --property=Linger --value 2>/dev/null)" = yes ]
+}
+
+# Rootless: the daemon runs as this user under systemd --user, so docker needs
+# neither sudo nor the docker group, which is root-equivalent. The setup tool
+# creates and switches to a "rootless" CLI context. Linger keeps the daemon
+# running after logout.
+setup_rootless_docker() {
+  local user
+  local status=present
+
+  info "Checking rootless Docker..."
+  user="$(id -un)"
+
+  if rootful_docker_enabled; then
+    info "Stopping the root Docker daemon..."
+    if ! sudo systemctl disable --now docker.service docker.socket ||
+      ! sudo rm -f /var/run/docker.sock; then
+      error "Could not stop the root Docker daemon."
+      record failed "rootless Docker" "Stop it with: sudo systemctl disable --now docker.service docker.socket"
+      return
+    fi
+    status=installed
+  fi
+
+  if ! rootless_docker_enabled; then
+    # The setup tool needs subordinate IDs, which adduser normally assigns.
+    if ! grep -q "^$user:" /etc/subuid 2>/dev/null || ! grep -q "^$user:" /etc/subgid 2>/dev/null; then
+      error "$user has no subordinate IDs in /etc/subuid and /etc/subgid."
+      record failed "rootless Docker" "Add them with: sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $user"
+      return
+    fi
+    if ! dockerd-rootless-setuptool.sh install; then
+      error "Rootless Docker setup failed."
+      record failed "rootless Docker" "Re-run ./bootstrap.sh to retry"
+      return
+    fi
+    status=installed
+  fi
+
+  if ! linger_enabled; then
+    if ! sudo loginctl enable-linger "$user"; then
+      error "Could not enable linger, so Docker stops when you log out."
+      record failed "rootless Docker" "Enable it with: sudo loginctl enable-linger $user"
+      return
+    fi
+    status=installed
+  fi
+
+  success "Rootless Docker is set up"
+  record "$status" "rootless Docker"
 }
 
 # Downloads an installer to a file before running it, so a dropped connection
@@ -967,12 +1127,46 @@ check_apt_packages() {
   local missing
 
   info "Debian packages:"
-  missing="$(missing_apt_packages)"
+  missing="$(missing_apt_packages "${APT_PACKAGES[@]}")"
   if [ -z "$missing" ]; then
     echo "  all installed"
     return
   fi
   echo "  $(echo "$missing" | wc -w | tr -d ' ') to install: $missing"
+}
+
+check_docker() {
+  local conflicts
+  local missing
+
+  info "Docker:"
+  conflicts="$(installed_apt_packages "${DOCKER_CONFLICTS[@]}")"
+  if [ -n "$conflicts" ]; then
+    echo "  Debian's Docker packages are installed ($conflicts); a run would skip Docker until they're removed"
+    return
+  fi
+
+  missing="$(missing_apt_packages "${DOCKER_PACKAGES[@]}")"
+  if [ -n "$missing" ]; then
+    if [ ! -f "$DOCKER_SOURCES" ]; then
+      echo "  a run would add Docker's apt repo"
+    fi
+    echo "  $(echo "$missing" | wc -w | tr -d ' ') to install: $missing"
+  else
+    echo "  packages installed"
+  fi
+
+  if rootful_docker_enabled; then
+    echo "  a run would stop and disable the root daemon"
+  fi
+  if rootless_docker_enabled; then
+    echo "  rootless daemon enabled"
+  else
+    echo "  a run would set up rootless Docker"
+  fi
+  if ! linger_enabled; then
+    echo "  a run would enable linger"
+  fi
 }
 
 check_user_tools() {
@@ -1151,6 +1345,8 @@ run_check() {
       echo
       check_user_tools
       echo
+      check_docker
+      echo
       check_login_shell
       ;;
   esac
@@ -1221,6 +1417,7 @@ main() {
       init_submodules
       link_fd
       install_ghostty_terminfo
+      install_docker
       install_fnm
       ;;
   esac
