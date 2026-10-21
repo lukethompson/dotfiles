@@ -25,6 +25,25 @@
   fi
 }
 
+# One ssh-agent for every session on Linux, so a key's passphrase is asked once
+# per boot: AddKeysToAgent in ~/.ssh/config loads it on first use. A working
+# agent (forwarded, or a desktop session's) is kept. macOS uses the keychain.
+if [[ $OSTYPE != darwin* ]] && (( $+commands[ssh-agent] )); then
+  () {
+    local sock="$HOME/.ssh/agent.sock"
+    # ssh-add -l exits 2 when no agent answers. Nothing answers on a stale
+    # socket left by a reboot, so it's replaced.
+    ssh-add -l &>/dev/null
+    (( $? != 2 )) && return
+    export SSH_AUTH_SOCK="$sock"
+    ssh-add -l &>/dev/null
+    (( $? != 2 )) && return
+    [[ -d ~/.ssh ]] || mkdir -m 700 ~/.ssh
+    rm -f "$sock"
+    ssh-agent -a "$sock" >/dev/null
+  }
+fi
+
 # =====================================
 # Prompt
 # =====================================
