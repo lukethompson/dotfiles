@@ -39,8 +39,9 @@ Run it as your own user, not root.
 
 ### macOS
 Installs the Command Line Tools, Homebrew, the Brewfile and Node, links the dotfiles, and
-offers to set a git identity and a GitHub SSH key. Upgrade with `brew upgrade`. Claude Code
-upgrades its own cask, because `.zshenv` sets `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`.
+offers to set a git identity, a GitHub SSH key and the GitHub CLI login. Upgrade with
+`brew upgrade`. Claude Code upgrades its own cask, because `.zshenv` sets
+`CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`.
 
 ### Debian
 Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry), and
@@ -72,11 +73,9 @@ On the Mac, the macOS keychain holds the passphrase. On Debian, each new zsh ses
 `ssh-agent`, so the passphrase is asked once per boot, on the first push. Every machine gets its
 own key; never copy the Mac's private key to another machine.
 
-Log in to the GitHub CLI by hand. It can upload the new public key for you:
-
-```bash
-gh auth login --git-protocol ssh
-```
+If the GitHub CLI isn't logged in, `bootstrap.sh` then offers to run
+`gh auth login --git-protocol ssh`, which logs in through the browser and asks before uploading
+the new public key.
 
 An existing `github.com` block in `~/.ssh/config` and an existing
 `~/.ssh/github.pub` are reported and left alone. Nothing trusts GitHub's host key for you: on
