@@ -853,6 +853,48 @@ install_node() {
   record installed "Node $(node --version)"
 }
 
+# Interactive: gh logs in through the browser or a device code, and asks
+# before uploading an SSH key. Runs after the packages, which install gh on the
+# Mac.
+login_github_cli() {
+  local login="gh auth login --hostname github.com --git-protocol ssh"
+  local reply
+
+  info "Checking GitHub CLI login..."
+  if ! command -v gh &>/dev/null; then
+    error "gh is not installed, so the GitHub CLI login was skipped."
+    record skipped "GitHub CLI login" "Install gh, then run: $login"
+    return
+  fi
+
+  if gh auth status --hostname github.com &>/dev/null; then
+    success "GitHub CLI is logged in"
+    record present "GitHub CLI login"
+    return
+  fi
+
+  if [ ! -t 0 ]; then
+    echo "Not running interactively, skipping GitHub CLI login"
+    record skipped "GitHub CLI login" "Log in with: $login"
+    return
+  fi
+
+  read -r -p "Log in to the GitHub CLI now? [y/N] " reply
+  if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+    echo "Skipping GitHub CLI login"
+    record skipped "GitHub CLI login" "Log in with: $login"
+    return
+  fi
+
+  if ! gh auth login --hostname github.com --git-protocol ssh; then
+    error "GitHub CLI login failed."
+    record failed "GitHub CLI login" "Log in with: $login"
+    return
+  fi
+  success "GitHub CLI logged in"
+  record installed "GitHub CLI login"
+}
+
 # Homebrew won't install tap formulae with outdated Command Line Tools, and a
 # run doesn't update them, so flag it here rather than midway through bundle.
 check_command_line_tools() {
@@ -1076,6 +1118,14 @@ check_prompts() {
   else
     echo "  GitHub SSH key: would prompt to generate one"
   fi
+
+  if ! command -v gh &>/dev/null; then
+    echo "  GitHub CLI login: gh is not installed yet; a run would offer to log in once it is"
+  elif gh auth status --hostname github.com &>/dev/null; then
+    echo "  GitHub CLI login: already logged in"
+  else
+    echo "  GitHub CLI login: would prompt to log in"
+  fi
 }
 
 # Every check must be read-only.
@@ -1195,6 +1245,7 @@ main() {
   check_repo_unchanged "$repo_before"
 
   install_node
+  login_github_cli
 
   # Last, since the SSH key and any errors have likely scrolled away.
   if ! print_summary; then
