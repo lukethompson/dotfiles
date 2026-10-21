@@ -1,6 +1,6 @@
 # Luke Thompson's dotfiles
 
-My personal dotfiles for macOS and a headless Debian dev machine.
+My personal dotfiles, built mainly for macOS, with support for a slimmed-down Debian dev machine.
 
 ## What's included
 - Opinionated zsh configuration with the following plugins:
