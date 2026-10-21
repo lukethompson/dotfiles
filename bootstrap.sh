@@ -544,17 +544,19 @@ configure_git_identity() {
   record installed "git identity"
 }
 
-# Debian only. Asks before changing it, since chsh asks for a password.
+# Debian only. Through sudo, which is usually still unlocked from the apt step
+# and works for an account without a password, unlike plain chsh.
 configure_login_shell() {
   local user
   local current
   local zsh_path
-  local reply
+  local hint
 
   info "Checking login shell..."
   user="$(id -un)"
   zsh_path="$(command -v zsh)"
   current="$(getent passwd "$user" | cut -d: -f7)"
+  hint="Change it with: sudo chsh -s $zsh_path $user"
 
   if [ "${current##*/}" = zsh ]; then
     success "Login shell is already zsh"
@@ -562,23 +564,17 @@ configure_login_shell() {
     return
   fi
 
-  if [ ! -t 0 ]; then
+  # Without a terminal, only if sudo needs no password.
+  if [ ! -t 0 ] && ! sudo -n true 2>/dev/null; then
     echo "Not running interactively, leaving the login shell as $current"
-    record skipped "zsh login shell" "Change it with: chsh -s $zsh_path"
+    record skipped "zsh login shell" "$hint"
     return
   fi
 
-  read -r -p "Change your login shell from $current to $zsh_path? [y/N] " reply
-  if [[ ! "$reply" =~ ^[Yy]$ ]]; then
-    echo "Leaving the login shell as $current"
-    record skipped "zsh login shell" "Change it with: chsh -s $zsh_path"
-    return
-  fi
-
-  # chsh asks for the account password, so it fails for an account without one.
-  if ! chsh -s "$zsh_path"; then
+  info "Changing the login shell from $current to $zsh_path..."
+  if ! sudo chsh -s "$zsh_path" "$user"; then
     error "Could not change the login shell."
-    record failed "zsh login shell" "If the account has no password, change it with: sudo chsh -s $zsh_path $user"
+    record failed "zsh login shell" "$hint"
     return
   fi
   success "Login shell changed to $zsh_path; it applies from the next login"
@@ -1010,7 +1006,7 @@ check_login_shell() {
   if [ "${current##*/}" = zsh ]; then
     echo "  zsh"
   else
-    echo "  $current; a run would offer to change it to zsh"
+    echo "  $current; a run would change it to zsh"
   fi
 }
 
