@@ -469,6 +469,33 @@ rootless_docker_enabled() {
   systemctl --user is-enabled --quiet docker.service 2>/dev/null
 }
 
+# Rootless Docker maps container users onto the user's subordinate IDs. Users
+# created without adduser, as on some VM images, have none.
+has_subids() {
+  grep -q "^$1:" /etc/subuid 2>/dev/null && grep -q "^$1:" /etc/subgid 2>/dev/null
+}
+
+# Adds 65536 IDs, the usual range size, starting after every range already in
+# either file, so they overlap no other user's.
+add_subids() {
+  local user="$1"
+  local first
+  local last
+
+  first="$(cat /etc/subuid /etc/subgid 2>/dev/null |
+    awk -F: 'BEGIN { next_id = 100000 } NF == 3 && $2 + $3 > next_id { next_id = $2 + $3 } END { print next_id }')"
+  last=$((first + 65535))
+
+  info "Adding subordinate IDs $first-$last for $user..."
+  # Only the missing file gets a range, so an existing one is never doubled.
+  if ! grep -q "^$user:" /etc/subuid 2>/dev/null; then
+    sudo touch /etc/subuid && sudo usermod --add-subuids "$first-$last" "$user" || return
+  fi
+  if ! grep -q "^$user:" /etc/subgid 2>/dev/null; then
+    sudo touch /etc/subgid && sudo usermod --add-subgids "$first-$last" "$user" || return
+  fi
+}
+
 linger_enabled() {
   [ "$(loginctl show-user "$(id -un)" --property=Linger --value 2>/dev/null)" = yes ]
 }
@@ -496,10 +523,9 @@ setup_rootless_docker() {
   fi
 
   if ! rootless_docker_enabled; then
-    # The setup tool needs subordinate IDs, which adduser normally assigns.
-    if ! grep -q "^$user:" /etc/subuid 2>/dev/null || ! grep -q "^$user:" /etc/subgid 2>/dev/null; then
-      error "$user has no subordinate IDs in /etc/subuid and /etc/subgid."
-      record failed "rootless Docker" "Add them with: sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $user"
+    if ! has_subids "$user" && ! add_subids "$user"; then
+      error "Could not give $user subordinate IDs."
+      record failed "rootless Docker" "Add a free range to /etc/subuid and /etc/subgid with: sudo usermod --add-subuids <first>-<last> --add-subgids <first>-<last> $user"
       return
     fi
     if ! dockerd-rootless-setuptool.sh install; then
@@ -1163,6 +1189,9 @@ check_docker() {
   if rootless_docker_enabled; then
     echo "  rootless daemon enabled"
   else
+    if ! has_subids "$(id -un)"; then
+      echo "  a run would add subordinate IDs to /etc/subuid and /etc/subgid"
+    fi
     echo "  a run would set up rootless Docker"
   fi
   if ! linger_enabled; then
