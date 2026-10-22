@@ -813,14 +813,15 @@ add_key_to_agent() {
     return
   fi
 
-  # Exit 2 means no agent is reachable. .zshrc starts one in each new zsh session,
-  # and AddKeysToAgent loads the key into it on first use.
-  ssh-add -l &>/dev/null || status=$?
+  # The agent .zshrc shares, never a forwarded one, which belongs to another
+  # machine. Exit 2 means it isn't running yet: the first zsh session starts
+  # it, and AddKeysToAgent loads the key into it on first use.
+  SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add -l &>/dev/null || status=$?
   if [ "$status" -eq 2 ]; then
     echo "No ssh-agent is running yet; the key is added on first use in a new zsh session."
     return
   fi
-  if ! ssh-add "$key"; then
+  if ! SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add "$key"; then
     error "Could not add the key to the agent; ssh will add it on first use."
   fi
 }
