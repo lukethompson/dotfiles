@@ -46,18 +46,18 @@ or window. Ghostty reloads its config with ⌘⇧,.
 
 - `.zshenv` — environment only: XDG paths, `ZDOTDIR`, `EDITOR`/`VISUAL` (nano), history
   settings, `skip_global_compinit`, `FNM_DIR`, `PNPM_HOME`,
-  `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`, and the user `PATH`: `~/.local/bin` and fnm's
-  default Node first, `$PNPM_HOME/bin` last. `PATH` lives here so commands run over SSH
-  (`ssh host cmd`, neither login nor interactive) find Node and pnpm. Zsh reads
-  `$ZDOTDIR/.zshenv`, so a nested shell that inherits `ZDOTDIR` skips it and relies on the
-  inherited environment.
+  `CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE`, `DOCKER_HOST` (Linux, when rootless Docker's socket
+  exists), and the user `PATH`: `~/.local/bin` and fnm's default Node first, `$PNPM_HOME/bin`
+  last. `PATH` lives here so commands run over SSH (`ssh host cmd`, neither login nor
+  interactive) find Node and pnpm. Zsh reads `$ZDOTDIR/.zshenv`, so a nested shell that inherits
+  `ZDOTDIR` skips it and relies on the inherited environment.
 - `.config/zsh/.zprofile` — login shells. Homebrew, then the same `PATH` entries again:
   on macOS `/etc/zprofile` runs `path_helper` after `.zshenv`, which moves `.zshenv`'s `PATH`
   entries behind the system directories, so any entry that must come first is re-added here.
 - `.config/zsh/.zshrc` — interactive shells. Editor (VS Code in VS Code's or code-server's
   terminal, or when `code` is on `PATH`, outside SSH, and on Linux in a graphical session), a
-  shared `ssh-agent` on Linux, tools, aliases, completions, plugins. Guard every
-  tool with `(( $+commands[tool] ))`: a fresh machine may not have it yet.
+  shared `ssh-agent` on Linux (never a forwarded one), tools, aliases, completions, plugins.
+  Guard every tool with `(( $+commands[tool] ))`: a fresh machine may not have it yet.
 - Aliases live in `.config/aliases/base`.
 
 ## Conventions

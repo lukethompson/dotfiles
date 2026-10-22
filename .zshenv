@@ -29,6 +29,13 @@ export PNPM_HOME="$XDG_DATA_HOME/pnpm"
 # install updates itself and ignores this.
 export CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE=1
 
+# Rootless Docker on Linux. The docker CLI finds it through its "rootless"
+# context, but Docker libraries (Python's docker, Testcontainers) read only
+# DOCKER_HOST and would otherwise try the root daemon's socket.
+if [[ $OSTYPE != darwin* && -S $XDG_RUNTIME_DIR/docker.sock ]]; then
+  export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
+fi
+
 # Path. Set here, not only in .zprofile, so commands run over SSH
 # (ssh host 'node -v') find Node and pnpm. That shell is neither login nor
 # interactive, so this is the only dotfile it reads.
