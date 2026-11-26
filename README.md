@@ -10,8 +10,7 @@ My personal dotfiles, built mainly for macOS, with support for a slimmed-down De
 - [Pure](https://github.com/sindresorhus/pure/) prompt
 - Git configuration, including a global gitignore
 - [Ghostty](https://ghostty.org/) configuration
-- [Homebrew](https://brew.sh/) package manager for macOS, plus the tools and packages I use — check out
-  the [Brewfile](https://github.com/lukethompson/dotfiles/blob/main/Brewfile)
+- [Homebrew](https://brew.sh/) packages for macOS, listed in the [Brewfile](Brewfile)
 
 ## Supported systems
 - Apple Silicon macOS
@@ -19,10 +18,17 @@ My personal dotfiles, built mainly for macOS, with support for a slimmed-down De
 
 ## Installation
 
+### Debian prerequisite
+
+If Git isn't installed yet:
+
 ```bash
-# Debian only: a fresh install has no git yet
 sudo apt install git
-# Clone the repository
+```
+
+### Bootstrap on either platform
+
+```bash
 git clone https://github.com/lukethompson/dotfiles.git
 cd dotfiles
 # Optional: see what a run would change first
@@ -31,16 +37,20 @@ cd dotfiles
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` is idempotent — it skips anything already installed, so it is safe to
-re-run. It doesn't upgrade installed packages. On both platforms it links the dotfiles and offers
-to set a git identity, a GitHub SSH key and the GitHub CLI login. It ends with a summary of every
-step, and exits non-zero if any step failed.
+Run `bootstrap.sh` as your own user, not root. You can re-run it to install missing packages
+without upgrading existing ones.
 
-Run it as your own user, not root.
+Before linking the dotfiles, bootstrap moves conflicting files to timestamped backups. It offers
+to set up your Git identity, a GitHub SSH key, and GitHub CLI login. It prints a summary at the end
+and exits non-zero if any step failed.
+
+Open a new terminal after setup to load the new configuration.
 
 ### macOS
-Installs the Command Line Tools, Homebrew, the Brewfile and Node. Upgrade with `brew upgrade`;
-Claude Code updates itself.
+
+Bootstrap installs the packages and apps listed in the [Brewfile](Brewfile) and the latest LTS
+version of Node through fnm. Use `brew upgrade` to update Homebrew packages and `fnm install --lts`
+to install a newer Node LTS. Claude Code can update itself.
 
 ### Debian
 Asks for `sudo` only when something system-wide is missing (packages, the terminfo entry, the
@@ -48,10 +58,10 @@ login shell, the Docker setup), and installs:
 
 | Tool | From | Update with |
 | --- | --- | --- |
-| zsh, git, gh, fzf, lazygit, ripgrep, fd, jq, stow, nano, build tools | apt (`APT_PACKAGES` in `bootstrap.sh`) | `sudo apt upgrade` |
+| Debian packages | apt (see `APT_PACKAGES` in [bootstrap.sh](bootstrap.sh)) | `sudo apt upgrade` |
 | Docker Engine, Compose, buildx | Docker's apt repo, run rootless | `sudo apt upgrade` |
 | `xterm-ghostty` terminfo | copied from ncurses-term's `ghostty` entry into `/etc/terminfo` | — |
-| fnm | official installer → `~/.local/bin` | `curl -fsSL https://fnm.vercel.app/install \| bash -s -- --install-dir ~/.local/bin --skip-shell` |
+| fnm | official installer → `~/.local/bin` | re-run the [official installer](https://github.com/Schniz/fnm#using-a-script-macoslinux) with `--install-dir ~/.local/bin --skip-shell` |
 | Node | latest LTS, through fnm | `fnm install --lts` |
 | pnpm | official standalone installer → `$PNPM_HOME/bin` | `pnpm self-update` |
 | herdr | official installer → `~/.local/bin` | `herdr update` |
@@ -59,12 +69,12 @@ login shell, the Docker setup), and installs:
 | Codex | official standalone installer → `~/.local/bin` | re-run the installer |
 | OpenCode v2 | official installer → `~/.opencode/bin`, linked into `~/.local/bin` | re-run the installer |
 
-Docker runs rootless: the daemon runs as you, so `docker` and `docker compose` need no `sudo`, and
-you're never added to the root-equivalent `docker` group.
+Bootstrap stops and disables the system Docker daemon when setting up rootless Docker. The rootless
+daemon runs as your user, so `docker` and `docker compose` don't need `sudo` or membership in the
+root-equivalent `docker` group.
 
 ## Local files
-You can add untracked local files to provide some machine-specific customizations. Currently the
-following files are supported:
+Machine-specific settings go in these untracked files:
 - `~/.config/aliases/local`
 - `~/.config/zsh/.zshrc.local`
 - `~/.gitconfig` — your git identity, written by `bootstrap.sh`
