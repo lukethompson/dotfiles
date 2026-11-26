@@ -866,7 +866,6 @@ EOF
 )"
   fi
 
-  # Leave existing github.com blocks for the user to edit.
   if grep -Eiq '^[[:space:]]*Host[[:space:]]+(.*[[:space:]])?github\.com([[:space:]]|$)' "$ssh_config" 2>/dev/null; then
     error "$ssh_config already has a github.com Host block, so it was left unchanged."
     error "Make sure that block uses the new key, for example:"
@@ -1403,6 +1402,9 @@ main() {
   # Installers write here; it must be a real directory, never a stow link.
   mkdir -p "$HOME/.local/bin"
 
+  # A step exits on failure only when later steps need it (Command Line Tools,
+  # Homebrew, apt packages, fnm, linking the dotfiles). Any other step records
+  # the failure and the run carries on.
   case "$PLATFORM" in
     macos)
       require_command_line_tools
