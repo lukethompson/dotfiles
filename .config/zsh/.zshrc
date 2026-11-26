@@ -36,9 +36,19 @@ if [[ $OSTYPE != darwin* ]] && (( $+commands[ssh-agent] )); then
     # socket left by a reboot, so it's replaced.
     ssh-add -l &>/dev/null
     (( $? != 2 )) && return
-    [[ -d ~/.ssh ]] || mkdir -m 700 ~/.ssh
-    rm -f "$SSH_AUTH_SOCK"
-    ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+    [[ -d ~/.ssh ]] || mkdir -p -m 700 ~/.ssh
+    # Shells that start together (restored panes) would each start an agent and
+    # unlink the others' sockets. One takes the lock and starts it; the rest
+    # re-check once it's released. flock needs the file to exist.
+    local lock=~/.ssh/agent.lock fd
+    : >>$lock
+    zmodload -F zsh/system b:zsystem && zsystem flock -t 10 -f fd $lock || return
+    ssh-add -l &>/dev/null
+    if (( $? == 2 )); then
+      rm -f "$SSH_AUTH_SOCK"
+      ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+    fi
+    zsystem flock -u $fd
   }
 fi
 
