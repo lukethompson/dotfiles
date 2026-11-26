@@ -9,16 +9,12 @@ RED='\033[0;31m'
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Same values .zshenv sets, which isn't linked yet on a fresh machine, so what
-# this script installs (brew trust, Node, pnpm) is where later shells look.
-# Set unconditionally, like .zshenv: keeping a value inherited from another
-# shell setup would install somewhere zsh never looks.
+# Match .zshenv even before it's linked; don't inherit another setup's XDG paths.
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$XDG_CONFIG_HOME/local/share"
 export XDG_CACHE_HOME="$XDG_CONFIG_HOME/cache"
 export PNPM_HOME="$XDG_DATA_HOME/pnpm"
 
-# So presence checks find tools already installed there.
 export PATH="$HOME/.local/bin:$PATH"
 
 CHECK_MODE=false
@@ -26,13 +22,9 @@ PLATFORM=""
 STOW_CONFLICTS=()
 STOW_ERROR=""
 
-# One "status|name|hint" entry per step, printed at the end. Status is one of
-# installed, present, skipped or failed; any failure makes the run exit 1.
 SUMMARY=()
 
-# Directories apps write to at runtime (zsh history, compdump), relative to the
-# target. They must exist before stowing, or stow replaces each with a single
-# symlink and those writes land in the repo.
+# Create these before stowing so runtime writes don't land in the repo.
 REAL_DIRS=(.config .config/zsh)
 
 # Debian packages. ncurses-term has Ghostty's terminfo entry.
@@ -61,7 +53,6 @@ record() {
   SUMMARY[${#SUMMARY[@]}]="$1|$2|${3:-}"
 }
 
-# Prints the summary and returns 1 if any step failed.
 print_summary() {
   local entry
   local status
@@ -89,8 +80,6 @@ print_summary() {
   return "$failed"
 }
 
-# Moves a path to a timestamped backup and prints the new path. The counter
-# stops two backups in the same second from overwriting each other.
 backup_path() {
   local path="$1"
   local stamp
@@ -152,7 +141,6 @@ unsupported() {
   exit 1
 }
 
-# Sets PLATFORM to macos or debian, or exits naming what doesn't match.
 detect_platform() {
   local os
   local id=""
@@ -173,7 +161,6 @@ detect_platform() {
       ;;
     Linux)
       [ -r /etc/os-release ] || unsupported "Linux without /etc/os-release"
-      # A subshell, so os-release's variables don't leak into this script.
       # shellcheck source=/dev/null
       id="$(. /etc/os-release && echo "${ID:-}")"
       # shellcheck source=/dev/null
@@ -196,8 +183,7 @@ detect_platform() {
       ;;
   esac
 
-  # Same per-platform value .zshenv sets, so Node installed here is the Node
-  # later shells find.
+  # Keep in sync with .zshenv.
   if [ "$PLATFORM" = macos ]; then
     export FNM_DIR="$HOME/Library/Application Support/fnm"
   else
@@ -235,8 +221,7 @@ init_submodules() {
 
 install_homebrew() {
   info "Checking for Homebrew..."
-  # Look for the binary itself. brew isn't on PATH until .zprofile runs, so
-  # `command -v brew` would miss an existing install and reinstall it.
+  # Homebrew may already be installed before .zprofile puts it on PATH.
   if [ -x /opt/homebrew/bin/brew ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     success "Homebrew is already installed"
@@ -258,9 +243,7 @@ install_homebrew() {
   record installed Homebrew
 }
 
-# stow links the dotfiles and fnm installs Node. Install them on their own so
-# a failed Brewfile entry can't leave either one missing.
-# Installs only what's missing, since brew install also upgrades.
+# Install stow and fnm separately so a Brewfile failure can't block setup.
 install_required_packages() {
   local package
   local to_install=()
@@ -312,7 +295,6 @@ installed_apt_packages() {
   echo "${installed# }"
 }
 
-# Only touches apt when something is missing, so a re-run needs no password.
 install_apt_packages() {
   local missing
 
@@ -325,8 +307,7 @@ install_apt_packages() {
   fi
 
   info "Installing Debian packages: $missing"
-  # Asks for the password up front and stops if the user can't sudo. Not
-  # sudo -v: it asks for a password unless every sudoers entry is NOPASSWD.
+  # Unlike sudo -v, sudo true works with a matching NOPASSWD rule.
   if ! sudo true; then
     error "Installing packages needs sudo. Get sudo access, then re-run this script."
     exit 1
@@ -368,9 +349,8 @@ ghostty_terminfo_installed() {
   env -u TERMINFO -u TERMINFO_DIRS HOME=/nonexistent infocmp xterm-ghostty &>/dev/null
 }
 
-# Ghostty sends TERM=xterm-ghostty over SSH, but ncurses-term calls the entry
-# ghostty. Copy it under Ghostty's name into /etc/terminfo, Debian's directory
-# for local entries, so it works under sudo too.
+# Debian ships ghostty; Ghostty sends xterm-ghostty over SSH.
+# Install the alias system-wide for sudo.
 install_ghostty_terminfo() {
   info "Checking for the xterm-ghostty terminfo entry..."
   if ghostty_terminfo_installed; then
@@ -391,7 +371,6 @@ install_ghostty_terminfo() {
   record installed "xterm-ghostty terminfo"
 }
 
-# The signing key and a deb822 sources file, as in Docker's install guide.
 add_docker_repo() {
   local key
   local codename
@@ -399,7 +378,6 @@ add_docker_repo() {
   local status=0
 
   key="$(mktemp)"
-  # A subshell, so os-release's variables don't leak into this script.
   # shellcheck source=/dev/null
   codename="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
   arch="$(dpkg --print-architecture)"
@@ -422,8 +400,6 @@ add_docker_repo() {
   return "$status"
 }
 
-# Not fatal: nothing later needs Docker, so a failure is recorded and the run
-# carries on.
 install_docker() {
   local conflicts
   local missing
@@ -493,7 +469,6 @@ add_subids() {
   last=$((first + 65535))
 
   info "Adding subordinate IDs $first-$last for $user..."
-  # Only the missing file gets a range, so an existing one is never doubled.
   if ! grep -q "^$user:" /etc/subuid 2>/dev/null; then
     sudo touch /etc/subuid && sudo usermod --add-subuids "$first-$last" "$user" || return
   fi
@@ -542,11 +517,8 @@ setup_rootless_docker() {
     status=installed
   fi
 
-  # Enabled isn't enough: a daemon that stopped or failed since an earlier run
-  # would otherwise be reported as present.
-  # reset-failed clears systemd's start limit, which a crash loop hits and which
-  # would refuse the start even after the cause is fixed.
   if ! rootless_docker_running; then
+    # Clear systemd's start limit before retrying a failed daemon.
     systemctl --user reset-failed docker.service 2>/dev/null || true
     if ! systemctl --user start docker.service || ! rootless_docker_running; then
       error "The rootless Docker daemon isn't running."
@@ -569,11 +541,7 @@ setup_rootless_docker() {
   record "$status" "rootless Docker"
 }
 
-# Downloads an installer to a file before running it, so a dropped connection
-# can't run half a script. Installers add their directory to a shell rc file;
-# ZDOTDIR points them at a scratch dir, since the real .zshrc is a symlink into
-# this repo. Their edits are reported and discarded: PATH already covers where
-# each tool installs.
+# Download fully before executing. Use a scratch ZDOTDIR to protect the stowed .zshrc.
 # run_installer <url> <interpreter> [installer args...]
 run_installer() {
   local url="$1"
@@ -603,7 +571,6 @@ run_installer() {
   return "$status"
 }
 
-# fnm is needed for Node, so a failure stops the run.
 install_fnm() {
   info "Checking for fnm..."
   if command -v fnm &>/dev/null; then
@@ -626,9 +593,6 @@ ensure_real_dirs() {
   local dir
 
   for dir in "${REAL_DIRS[@]}"; do
-    # An earlier run linked this whole directory to the repo. Deleting the
-    # symlink isn't enough: files apps wrote through it are in the repo now and
-    # would be linked straight back.
     if [ -L "$target/$dir" ]; then
       error "$target/$dir is a symlink, so writes to it land in the repo."
       error "Unstow with: stow --dir=\"$DOTFILES_DIR\" --target=\"$target\" -D ."
@@ -639,9 +603,6 @@ ensure_real_dirs() {
   done
 }
 
-# One real file where a symlink should go makes stow abort everything. Apps
-# opened before bootstrapping (e.g. Ghostty) leave these behind, so back them
-# up without asking.
 resolve_stow_conflicts() {
   local target="$1"
   local path
@@ -673,9 +634,7 @@ resolve_stow_conflicts() {
   fi
 }
 
-# Whether a restow would change anything. On an up-to-date target the dry run
-# unlinks every link and relinks it, marking each relink "(reverts previous
-# action)"; any other action, or a failed dry run (a conflict), is a change.
+# A no-op restow pairs each UNLINK with a LINK marked "(reverts previous action)".
 stow_would_change() {
   local target="$1"
   local output
@@ -709,9 +668,7 @@ stow_dotfiles() {
   record "$status" "dotfiles symlinks"
 }
 
-# The identity goes in ~/.gitconfig, which git reads after ~/.config/git/config.
-# The file must exist even without one: otherwise git config --global writes
-# to ~/.config/git/config, which is a symlink into the repo.
+# Keep ~/.gitconfig even when empty so git config --global won't write into the repo.
 configure_git_identity() {
   local gitconfig="$HOME/.gitconfig"
   local git_name
@@ -833,7 +790,6 @@ generate_github_ssh_key() {
   chmod 700 "$HOME/.ssh"
   ssh-keygen -t ed25519 -C "$github_email" -f "$HOME/.ssh/github"
 
-  # Not fatal: the key is still usable, and AddKeysToAgent loads it on first use.
   add_key_to_agent "$HOME/.ssh/github"
 
   success "GitHub SSH key created. Copy the public key below, then add it at https://github.com/settings/ssh/new"
@@ -859,9 +815,7 @@ add_key_to_agent() {
     return
   fi
 
-  # The agent .zshrc shares, never a forwarded one, which belongs to another
-  # machine. Exit 2 means it isn't running yet: the first zsh session starts
-  # it, and AddKeysToAgent loads the key into it on first use.
+  # Use zsh's shared local agent, not a forwarded one. Exit 2 means unreachable.
   SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add -l &>/dev/null || status=$?
   if [ "$status" -eq 2 ]; then
     echo "No ssh-agent is running yet; the key is added on first use in a new zsh session."
@@ -882,8 +836,7 @@ configure_github_ssh_host() {
   fi
 
   info "Checking GitHub SSH config..."
-  # Ask ssh which keys github.com resolves to, rather than grepping for the
-  # key: an IdentityFile under another Host alias doesn't apply to github.com.
+  # Use ssh -G so IdentityFile entries for other hosts don't count.
   if ssh -G -F "$ssh_config" github.com </dev/null 2>/dev/null |
     grep -Eqx "identityfile (~|$HOME)/\.ssh/github"; then
     success "GitHub SSH config already uses ~/.ssh/github"
@@ -910,8 +863,7 @@ EOF
 )"
   fi
 
-  # ssh uses the first value it finds, so a block appended after an existing
-  # github.com block would be ignored.
+  # Leave existing github.com blocks for the user to edit.
   if grep -Eiq '^[[:space:]]*Host[[:space:]]+(.*[[:space:]])?github\.com([[:space:]]|$)' "$ssh_config" 2>/dev/null; then
     error "$ssh_config already has a github.com Host block, so it was left unchanged."
     error "Make sure that block uses the new key, for example:"
@@ -926,8 +878,6 @@ EOF
   record installed "GitHub SSH config"
 }
 
-# Not fatal: one failed entry (a cask download, a cancelled sudo prompt) fails
-# brew bundle, and later steps don't need the rest.
 install_homebrew_packages() {
   info "Installing Homebrew packages..."
   # Homebrew won't load formulae from third-party taps until they're trusted.
@@ -936,8 +886,7 @@ install_homebrew_packages() {
     error "Could not trust anomalyco/tap/opencode-v2; brew bundle will fail to install it."
     record failed "brew trust anomalyco/tap/opencode-v2"
   fi
-  # --no-upgrade: a re-run only installs what's missing. Upgrading would quit
-  # running apps to replace them; that's for `brew upgrade`.
+  # Upgrading casks can quit running apps.
   if ! brew bundle install --no-upgrade --file="$DOTFILES_DIR/Brewfile"; then
     error "Some Homebrew packages failed to install. Continuing with the remaining steps."
     record failed "Homebrew packages" "Fix them, then re-run: brew bundle install --no-upgrade --file=\"$DOTFILES_DIR/Brewfile\""
@@ -968,8 +917,7 @@ install_codex() {
   CODEX_NON_INTERACTIVE=1 run_installer https://chatgpt.com/codex/install.sh sh
 }
 
-# OpenCode installs to ~/.opencode/bin; link it into ~/.local/bin. This only
-# runs when opencode isn't on PATH, so any existing link is broken.
+# Link OpenCode's installer-managed binary into ~/.local/bin.
 install_opencode() {
   local link="$HOME/.local/bin/opencode"
 
@@ -980,8 +928,6 @@ install_opencode() {
   ln -s "$HOME/.opencode/bin/opencode" "$link"
 }
 
-# Not fatal: nothing later depends on these, so a failure is recorded and the
-# run carries on. Installs only what's missing, like brew bundle --no-upgrade.
 # install_user_tool <name> <command that succeeds when installed> <install command>
 install_user_tool() {
   local name="$1"
@@ -1056,9 +1002,6 @@ install_node() {
   record installed "Node $(node --version)"
 }
 
-# Interactive: gh logs in through the browser or a device code, and asks
-# before uploading an SSH key. Runs after the packages, which install gh on the
-# Mac.
 login_github_cli() {
   local login="gh auth login --hostname github.com --git-protocol ssh"
   local reply
@@ -1299,7 +1242,6 @@ check_node() {
   fi
 }
 
-# Mirrors ensure_real_dirs, which stops a run when any of these is a symlink.
 check_real_dirs() {
   local target="${1:-$HOME}"
   local dir
@@ -1381,7 +1323,6 @@ run_check() {
 
   case "$PLATFORM" in
     macos)
-      # Put brew, stow and fnm on PATH for the checks below (this process only).
       if [ -x /opt/homebrew/bin/brew ]; then
         eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
@@ -1494,7 +1435,6 @@ main() {
   install_node
   login_github_cli
 
-  # Last, since the SSH key and any errors have likely scrolled away.
   if ! print_summary; then
     echo
     error "Bootstrap finished, but some steps failed. See the summary above."
