@@ -33,12 +33,15 @@ APT_PACKAGES=(
   ncurses-term openssh-client python3 python3-venv ripgrep stow unzip xz-utils zsh
 )
 
-# Docker from Docker's own apt repo, since Debian's docker.io lags upstream
-# support. The last three are Debian's, needed to run it rootless.
 DOCKER_PACKAGES=(
+  # From Docker's apt repo.
   docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  docker-ce-rootless-extras dbus-user-session slirp4netns uidmap
+  docker-ce-rootless-extras
+
+  # From Debian's repos, for rootless Docker.
+  dbus-user-session slirp4netns uidmap
 )
+
 # Debian packages Docker's replace. apt-get -y would remove them silently.
 DOCKER_CONFLICTS=(docker.io docker-compose docker-doc docker-buildx podman-docker containerd runc)
 DOCKER_SOURCES=/etc/apt/sources.list.d/docker.sources
