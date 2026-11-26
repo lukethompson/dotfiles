@@ -471,6 +471,10 @@ rootless_docker_enabled() {
   systemctl --user is-enabled --quiet docker.service 2>/dev/null
 }
 
+rootless_docker_running() {
+  systemctl --user is-active --quiet docker.service 2>/dev/null
+}
+
 # Rootless Docker maps container users onto the user's subordinate IDs. Users
 # created without adduser, as on some VM images, have none.
 has_subids() {
@@ -533,6 +537,20 @@ setup_rootless_docker() {
     if ! dockerd-rootless-setuptool.sh install; then
       error "Rootless Docker setup failed."
       record failed "rootless Docker" "Re-run ./bootstrap.sh to retry"
+      return
+    fi
+    status=installed
+  fi
+
+  # Enabled isn't enough: a daemon that stopped or failed since an earlier run
+  # would otherwise be reported as present.
+  # reset-failed clears systemd's start limit, which a crash loop hits and which
+  # would refuse the start even after the cause is fixed.
+  if ! rootless_docker_running; then
+    systemctl --user reset-failed docker.service 2>/dev/null || true
+    if ! systemctl --user start docker.service || ! rootless_docker_running; then
+      error "The rootless Docker daemon isn't running."
+      record failed "rootless Docker" "See why with: systemctl --user status docker.service"
       return
     fi
     status=installed
@@ -1189,7 +1207,11 @@ check_docker() {
     echo "  a run would stop and disable the root daemon"
   fi
   if rootless_docker_enabled; then
-    echo "  rootless daemon enabled"
+    if rootless_docker_running; then
+      echo "  rootless daemon enabled and running"
+    else
+      echo "  rootless daemon enabled but not running; a run would start it"
+    fi
   else
     if ! has_subids "$(id -un)"; then
       echo "  a run would add subordinate IDs to /etc/subuid and /etc/subgid"
