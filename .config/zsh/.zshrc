@@ -36,7 +36,7 @@ if [[ $OSTYPE != darwin* ]] && (( $+commands[ssh-agent] )); then
     # socket left by a reboot, so it's replaced.
     ssh-add -l &>/dev/null
     (( $? != 2 )) && return
-    [[ -d ~/.ssh ]] || mkdir -p -m 700 ~/.ssh
+    mkdir -p -m 700 ~/.ssh
     # Shells that start together (restored panes) would each start an agent and
     # unlink the others' sockets. One takes the lock and starts it; the rest
     # re-check once it's released. flock needs the file to exist.
