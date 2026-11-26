@@ -11,10 +11,12 @@ DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Same values .zshenv sets, which isn't linked yet on a fresh machine, so what
 # this script installs (brew trust, Node, pnpm) is where later shells look.
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-export XDG_DATA_HOME="${XDG_DATA_HOME:-$XDG_CONFIG_HOME/local/share}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$XDG_CONFIG_HOME/cache}"
-export PNPM_HOME="${PNPM_HOME:-$XDG_DATA_HOME/pnpm}"
+# Set unconditionally, like .zshenv: keeping a value inherited from another
+# shell setup would install somewhere zsh never looks.
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$XDG_CONFIG_HOME/local/share"
+export XDG_CACHE_HOME="$XDG_CONFIG_HOME/cache"
+export PNPM_HOME="$XDG_DATA_HOME/pnpm"
 
 # So presence checks find tools already installed there.
 export PATH="$HOME/.local/bin:$PATH"
@@ -197,9 +199,9 @@ detect_platform() {
   # Same per-platform value .zshenv sets, so Node installed here is the Node
   # later shells find.
   if [ "$PLATFORM" = macos ]; then
-    export FNM_DIR="${FNM_DIR:-$HOME/Library/Application Support/fnm}"
+    export FNM_DIR="$HOME/Library/Application Support/fnm"
   else
-    export FNM_DIR="${FNM_DIR:-$XDG_DATA_HOME/fnm}"
+    export FNM_DIR="$XDG_DATA_HOME/fnm"
   fi
 }
 
