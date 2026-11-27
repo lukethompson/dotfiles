@@ -1395,7 +1395,7 @@ main() {
   detect_platform
 
   if [ "$CHECK_MODE" = true ]; then
-    run_check
+    run_check "$HOME"
     exit 0
   fi
 
@@ -1422,7 +1422,7 @@ main() {
       ;;
   esac
 
-  stow_dotfiles
+  stow_dotfiles "$HOME"
   configure_git_identity
   if [ "$PLATFORM" = debian ]; then
     configure_login_shell
