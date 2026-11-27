@@ -1,7 +1,9 @@
 # dotfiles
 
 Personal dotfiles deployed with GNU Stow. `bootstrap.sh` supports Apple Silicon macOS and
-Debian 13+ (amd64, arm64); run it as your own user, not root.
+Debian 13+ (amd64, arm64); run it as your own user, not root. On Debian, a plain run sets up a
+base server; `--rootless-docker` and `--dev-tools` add Docker and the dev toolchain (a dev
+machine uses both). macOS ignores them.
 
 ## Verifying changes
 
@@ -9,7 +11,7 @@ There is no build or test suite. Start with the relevant read-only checks:
 
 | Command | Checks |
 | --- | --- |
-| `./bootstrap.sh --check` | Reports what a run would change, changing nothing |
+| `./bootstrap.sh --check` | Reports what a run would change, changing nothing. Takes the Debian options too |
 | `/bin/bash -n bootstrap.sh` | Script syntax with the interpreter bootstrap uses |
 | `zsh -n <file>` | Syntax of a changed zsh file |
 | `git diff --check` | Whitespace errors |
@@ -36,7 +38,8 @@ Both runs should start without errors. The second starts with a minimal `PATH`, 
 
 Test Debian changes in a throwaway OrbStack machine (`orb create debian:trixie`, with
 `--arch amd64` for amd64). Clone the branch inside the VM rather than using the Mac's repo
-through the home mount. Run ShellCheck there (`sudo apt install shellcheck`).
+through the home mount. Run ShellCheck there (`sudo apt install shellcheck`). Test a base run,
+then `--rootless-docker --dev-tools` on the same machine.
 
 ## How deployment works
 
@@ -82,6 +85,8 @@ These commands change the machine or checkout. Run them for setup or deployment,
 - Platform-specific steps go in `main`'s and `run_check`'s `case "$PLATFORM"`. Tracked shell
   config tells the platforms apart by `$OSTYPE` (`darwin*`), never by whether a command
   exists; command lookups are for tool guards only.
+- Debian steps beyond the base machine go behind `--rootless-docker` or `--dev-tools`, in both
+  `main` and `run_check`. Retry hints use `$(rerun_command)` so they keep the run's options.
 - Reflect new bootstrap machine changes in `--check`. Keep check mode read-only.
 - Brewfile: taps first, then `brew` and `cask` entries, each sorted by name (ignoring any tap
   prefix) and preceded by a `# description` comment taken from `brew desc`.
