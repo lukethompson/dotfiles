@@ -1,6 +1,7 @@
 # Luke Thompson's dotfiles
 
-My personal dotfiles, built primarily for macOS, with support for a headless Debian dev machine.
+My personal dotfiles, built primarily for macOS, with support for headless
+Debian machines: a server by default, or a dev machine.
 
 ## What's included
 
@@ -10,7 +11,7 @@ My personal dotfiles, built primarily for macOS, with support for a headless Deb
   [zsh-autosuggestions](https://github.com/zsh-users/zsh-autosuggestions),
   [zsh-completions](https://github.com/zsh-users/zsh-completions), and
   [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting).
-- **Git:** Shared defaults and a global gitignore.
+- **Git:** A global gitignore. Your identity goes in the untracked `~/.gitconfig`.
 
 ### macOS
 
@@ -19,8 +20,10 @@ My personal dotfiles, built primarily for macOS, with support for a headless Deb
 
 ### Debian
 
-- **Containers:** Rootless Docker and Compose.
-- **Developer tools:** CLI packages and tools listed in [bootstrap.sh](bootstrap.sh).
+- **Base:** zsh as the login shell and a few CLI tools listed in [bootstrap.sh](bootstrap.sh).
+- **Containers** (`--rootless-docker`): Rootless Docker and Compose.
+- **Developer tools** (`--dev-tools`): Build tools, Node with [fnm](https://github.com/Schniz/fnm),
+  pnpm, agent CLIs, and GitHub CLI and SSH access, listed in [bootstrap.sh](bootstrap.sh).
 
 ## Supported systems
 - Apple Silicon macOS
@@ -47,6 +50,14 @@ cd dotfiles
 ./bootstrap.sh
 ```
 
+On Debian, a plain run sets up a base server. Add options for more; `--check` takes them too,
+and macOS ignores them:
+
+```bash
+# Dev machine
+./bootstrap.sh --rootless-docker --dev-tools
+```
+
 Run `bootstrap.sh` as your own user, not root. You can re-run it to install missing packages
 without upgrading existing ones.
 
@@ -63,7 +74,8 @@ Node is managed separately with [fnm](https://github.com/Schniz/fnm).
 
 The package list is in [bootstrap.sh](bootstrap.sh). Update apt packages with `sudo apt upgrade`.
 
-Bootstrap stops and disables the system Docker daemon when setting up rootless Docker.
+With `--rootless-docker`, bootstrap stops and disables the system Docker daemon when setting up
+rootless Docker.
 After that, `docker` and `docker compose` run without `sudo`.
 
 ## Local files
