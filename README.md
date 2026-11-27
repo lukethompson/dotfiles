@@ -1,16 +1,26 @@
 # Luke Thompson's dotfiles
 
-My personal dotfiles, built mainly for macOS, with support for a slimmed-down Debian dev machine.
+My personal dotfiles, built primarily for macOS, with support for a headless Debian dev machine.
 
 ## What's included
-- Opinionated zsh configuration with the following plugins:
-  - [zsh-autosuggestions](https://github.com/zsh-users/zsh-autosuggestions)
-  - [zsh-completions](https://github.com/zsh-users/zsh-completions)
-  - [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting)
-- [Pure](https://github.com/sindresorhus/pure/) prompt
-- Git configuration, including a global gitignore
-- [Ghostty](https://ghostty.org/) configuration
-- [Homebrew](https://brew.sh/) packages for macOS, listed in the [Brewfile](Brewfile)
+
+### Shared
+
+- **Shell:** zsh with the [Pure](https://github.com/sindresorhus/pure/) prompt, shell aliases,
+  [zsh-autosuggestions](https://github.com/zsh-users/zsh-autosuggestions),
+  [zsh-completions](https://github.com/zsh-users/zsh-completions), and
+  [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting).
+- **Git:** Shared defaults and a global gitignore.
+
+### macOS
+
+- **[Ghostty](https://ghostty.org/) configuration.**
+- **Apps and tools:** [Homebrew](https://brew.sh/) packages listed in the [Brewfile](Brewfile).
+
+### Debian
+
+- **Containers:** Rootless Docker and Compose.
+- **Developer tools:** CLI packages and tools listed in [bootstrap.sh](bootstrap.sh).
 
 ## Supported systems
 - Apple Silicon macOS
