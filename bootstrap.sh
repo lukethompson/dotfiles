@@ -18,6 +18,8 @@ export PNPM_HOME="$XDG_DATA_HOME/pnpm"
 export PATH="$HOME/.local/bin:$PATH"
 
 CHECK_MODE=false
+DEV_TOOLS=false
+ROOTLESS_DOCKER=false
 PLATFORM=""
 STOW_CONFLICTS=()
 STOW_ERROR=""
@@ -27,11 +29,16 @@ SUMMARY=()
 # Create these before stowing so runtime writes don't land in the repo.
 REAL_DIRS=(.config .config/zsh)
 
-# Debian packages. ncurses-term has Ghostty's terminfo entry.
-APT_PACKAGES=(
-  build-essential ca-certificates curl fd-find fzf gh git jq lazygit less nano
-  ncurses-term openssh-client python3 python3-venv ripgrep stow unzip xz-utils zsh
+# ncurses-term ships Ghostty's terminfo entry.
+APT_BASE_PACKAGES=(
+  ca-certificates curl fd-find fzf git jq less nano ncurses-term openssh-client
+  ripgrep stow zsh
 )
+
+# fnm needs unzip; Node tarballs need xz-utils.
+APT_DEV_PACKAGES=(build-essential gh lazygit python3 python3-venv unzip xz-utils)
+
+APT_PACKAGES=()
 
 DOCKER_PACKAGES=(
   # From Docker's apt repo.
@@ -192,6 +199,53 @@ detect_platform() {
   else
     export FNM_DIR="$XDG_DATA_HOME/fnm"
   fi
+}
+
+wants_dev_tools() {
+  [ "$PLATFORM" = macos ] || [ "$DEV_TOOLS" = true ]
+}
+
+# Preserve Debian options so a retry includes the failed step.
+rerun_command() {
+  local command="./bootstrap.sh"
+
+  if [ "$PLATFORM" = debian ]; then
+    if [ "$ROOTLESS_DOCKER" = true ]; then
+      command="$command --rootless-docker"
+    fi
+    if [ "$DEV_TOOLS" = true ]; then
+      command="$command --dev-tools"
+    fi
+  fi
+  echo "$command"
+}
+
+select_apt_packages() {
+  APT_PACKAGES=("${APT_BASE_PACKAGES[@]}")
+  if [ "$DEV_TOOLS" = true ]; then
+    APT_PACKAGES=("${APT_PACKAGES[@]}" "${APT_DEV_PACKAGES[@]}")
+  fi
+}
+
+describe_profile() {
+  local profile="base"
+
+  if [ "$PLATFORM" = macos ]; then
+    if [ "$DEV_TOOLS" = true ] || [ "$ROOTLESS_DOCKER" = true ]; then
+      info "--rootless-docker and --dev-tools apply only to Debian; ignoring them."
+      echo
+    fi
+    return
+  fi
+
+  if [ "$ROOTLESS_DOCKER" = true ]; then
+    profile="$profile + rootless Docker"
+  fi
+  if [ "$DEV_TOOLS" = true ]; then
+    profile="$profile + dev tools"
+  fi
+  info "Debian: $profile"
+  echo
 }
 
 # git ships with the Command Line Tools. xcode-select --install only opens an
@@ -411,7 +465,7 @@ install_docker() {
   conflicts="$(installed_apt_packages "${DOCKER_CONFLICTS[@]}")"
   if [ -n "$conflicts" ]; then
     error "Debian's Docker packages are installed ($conflicts), which Docker's own packages replace."
-    record failed Docker "Remove them with: sudo apt remove $conflicts, then re-run ./bootstrap.sh"
+    record failed Docker "Remove them with: sudo apt remove $conflicts, then re-run $(rerun_command)"
     return
   fi
 
@@ -423,14 +477,14 @@ install_docker() {
     info "Installing Docker packages: $missing"
     if [ ! -f "$DOCKER_SOURCES" ] && ! add_docker_repo; then
       error "Could not add Docker's apt repo."
-      record failed "Docker packages" "Re-run ./bootstrap.sh to retry"
+      record failed "Docker packages" "Re-run $(rerun_command) to retry"
       return
     fi
     # Unquoted on purpose: one argument per package.
     # shellcheck disable=SC2086
     if ! sudo apt-get update || ! sudo apt-get install -y $missing; then
       error "Docker packages failed to install. Continuing with the remaining steps."
-      record failed "Docker packages" "Re-run ./bootstrap.sh to retry"
+      record failed "Docker packages" "Re-run $(rerun_command) to retry"
       return
     fi
     success "Docker packages installed"
@@ -514,7 +568,7 @@ setup_rootless_docker() {
     fi
     if ! dockerd-rootless-setuptool.sh install; then
       error "Rootless Docker setup failed."
-      record failed "rootless Docker" "Re-run ./bootstrap.sh to retry"
+      record failed "rootless Docker" "Re-run $(rerun_command) to retry"
       return
     fi
     status=installed
@@ -690,7 +744,7 @@ configure_git_identity() {
 
   if [ ! -t 0 ]; then
     echo "Not running interactively, skipping git identity setup"
-    record skipped "git identity" "Re-run ./bootstrap.sh in a terminal to set it"
+    record skipped "git identity" "Re-run $(rerun_command) in a terminal to set it"
     return
   fi
 
@@ -761,7 +815,7 @@ generate_github_ssh_key() {
   # ssh-keygen would overwrite it, and it may be registered somewhere.
   if [ -e "$HOME/.ssh/github.pub" ]; then
     error "$HOME/.ssh/github.pub exists without its private key, so no key was generated."
-    record skipped "GitHub SSH key" "Move ~/.ssh/github.pub aside, then re-run ./bootstrap.sh"
+    record skipped "GitHub SSH key" "Move ~/.ssh/github.pub aside, then re-run $(rerun_command)"
     return
   fi
 
@@ -949,7 +1003,7 @@ install_user_tool() {
     record installed "$name"
   else
     error "$name installation failed. Continuing with the remaining steps."
-    record failed "$name" "Re-run ./bootstrap.sh to retry"
+    record failed "$name" "Re-run $(rerun_command) to retry"
   fi
 }
 
@@ -1172,6 +1226,9 @@ check_user_tools() {
   info "User tools:"
   check_user_tool fd "has_command fd" "link ~/.local/bin/fd to fdfind"
   check_user_tool "xterm-ghostty terminfo" ghostty_terminfo_installed "copy it from the ghostty entry into /etc/terminfo"
+  if [ "$DEV_TOOLS" != true ]; then
+    return
+  fi
   check_user_tool fnm "has_command fnm" "install it"
   check_user_tool pnpm pnpm_installed "install it"
   check_user_tool herdr herdr_installed "install it"
@@ -1299,6 +1356,10 @@ check_prompts() {
     echo "  git identity: would prompt for name and email"
   fi
 
+  if ! wants_dev_tools; then
+    return
+  fi
+
   if [ -f "$target/.ssh/github" ]; then
     echo "  GitHub SSH key: already exists"
   elif [ -e "$target/.ssh/github.pub" ]; then
@@ -1322,6 +1383,7 @@ run_check() {
 
   info "Check mode: reporting what a run would change, changing nothing."
   echo
+  describe_profile
 
   case "$PLATFORM" in
     macos)
@@ -1342,16 +1404,20 @@ run_check() {
       echo
       check_user_tools
       echo
-      check_docker
-      echo
+      if [ "$ROOTLESS_DOCKER" = true ]; then
+        check_docker
+        echo
+      fi
       check_login_shell
       ;;
   esac
   echo
-  check_node
-  echo
-  check_pnpm_shadowing
-  echo
+  if wants_dev_tools; then
+    check_node
+    echo
+    check_pnpm_shadowing
+    echo
+  fi
   check_real_dirs "$target"
   echo
   check_stow_conflicts "$target"
@@ -1361,10 +1427,16 @@ run_check() {
 
 usage() {
   cat <<EOF
-Usage: ${0##*/} [--check]
+Usage: ${0##*/} [--check] [--rootless-docker] [--dev-tools]
 
-  --check     Report what a run would change, without changing anything.
-  -h, --help  Show this help.
+  --check            Report what a run would change, without changing anything.
+  --rootless-docker  Debian: also set up rootless Docker and Compose.
+  --dev-tools        Debian: also install build tools, Node (fnm), pnpm, agent
+                     CLIs, and GitHub CLI and SSH access.
+  -h, --help         Show this help.
+
+Without options, Debian gets a base machine: zsh, the dotfiles, and a few CLI
+tools. A dev machine is --rootless-docker --dev-tools. macOS ignores both.
 EOF
 }
 
@@ -1373,6 +1445,12 @@ parse_args() {
     case "$1" in
       --check)
         CHECK_MODE=true
+        ;;
+      --rootless-docker)
+        ROOTLESS_DOCKER=true
+        ;;
+      --dev-tools)
+        DEV_TOOLS=true
         ;;
       -h | --help)
         usage
@@ -1393,18 +1471,19 @@ main() {
 
   parse_args "$@"
   detect_platform
+  select_apt_packages
 
   if [ "$CHECK_MODE" = true ]; then
     run_check "$HOME"
     exit 0
   fi
 
+  describe_profile
+
   # Installers write here; it must be a real directory, never a stow link.
   mkdir -p "$HOME/.local/bin"
 
-  # A step exits on failure only when later steps need it (Command Line Tools,
-  # Homebrew, apt packages, fnm, linking the dotfiles). Any other step records
-  # the failure and the run carries on.
+  # Prerequisite failures stop setup; optional failures go in the summary.
   case "$PLATFORM" in
     macos)
       require_command_line_tools
@@ -1417,8 +1496,12 @@ main() {
       init_submodules
       link_fd
       install_ghostty_terminfo
-      install_docker
-      install_fnm
+      if [ "$ROOTLESS_DOCKER" = true ]; then
+        install_docker
+      fi
+      if [ "$DEV_TOOLS" = true ]; then
+        install_fnm
+      fi
       ;;
   esac
 
@@ -1427,18 +1510,21 @@ main() {
   if [ "$PLATFORM" = debian ]; then
     configure_login_shell
   fi
-  generate_github_ssh_key
-  configure_github_ssh_host
 
-  repo_before="$(repo_state)"
-  case "$PLATFORM" in
-    macos) install_homebrew_packages ;;
-    debian) install_user_tools ;;
-  esac
-  check_repo_unchanged "$repo_before"
+  if wants_dev_tools; then
+    generate_github_ssh_key
+    configure_github_ssh_host
 
-  install_node
-  login_github_cli
+    repo_before="$(repo_state)"
+    case "$PLATFORM" in
+      macos) install_homebrew_packages ;;
+      debian) install_user_tools ;;
+    esac
+    check_repo_unchanged "$repo_before"
+
+    install_node
+    login_github_cli
+  fi
 
   if ! print_summary; then
     echo
