@@ -96,8 +96,6 @@ These commands change the machine or checkout. Run them for setup or deployment,
 
 ## Gotchas
 
-- **XDG paths are non-standard.** `XDG_DATA_HOME` is `~/.config/local/share` and
-  `XDG_CACHE_HOME` is `~/.config/cache`, not under `~/.local`.
 - **`bootstrap.sh` runs under macOS's `/bin/bash` 3.2.** No bash 4 features (`mapfile`,
   associative arrays, `${var,,}`). Expanding an empty array errors under `set -u`, so check
   `${#array[@]}` before looping.
