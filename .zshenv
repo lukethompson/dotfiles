@@ -3,8 +3,8 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$XDG_CONFIG_HOME/local/share"
 export XDG_CACHE_HOME="$XDG_CONFIG_HOME/cache"
 
-# --wait lets Git wait for the editor tab to close.
 if [[ $OSTYPE == darwin* ]]; then
+  # --wait lets Git wait for the editor tab to close.
   export EDITOR="code --wait"
 else
   export EDITOR="nano"
