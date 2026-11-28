@@ -58,6 +58,8 @@ info() { echo -e "${BLUE}$1${NOCOLOR}"; }
 success() { echo -e "${GREEN}$1${NOCOLOR}"; }
 error() { echo -e "${RED}$1${NOCOLOR}" >&2; }
 
+has_command() { command -v "$1" &>/dev/null; }
+
 # record <installed|present|skipped|failed> <name> [hint]
 record() {
   SUMMARY[${#SUMMARY[@]}]="$1|$2|${3:-}"
@@ -88,61 +90,6 @@ print_summary() {
     fi
   done
   return "$failed"
-}
-
-backup_path() {
-  local path="$1"
-  local stamp
-  stamp="$(date +%Y%m%d-%H%M%S)"
-  local backup="$path.bak.$stamp"
-  local suffix=1
-
-  while [ -e "$backup" ]; do
-    backup="$path.bak.$stamp-$suffix"
-    suffix=$((suffix + 1))
-  done
-
-  mv "$path" "$backup"
-  echo "$backup"
-}
-
-# Fills STOW_CONFLICTS with the paths stow would refuse to overwrite. A dry
-# run (--no) lists them all at once. Stow phrases conflicts two ways, so match
-# both. Any other failure returns 1 and leaves stow's output in STOW_ERROR.
-detect_stow_conflicts() {
-  local target="$1"
-  local output=""
-  local path
-
-  STOW_CONFLICTS=()
-  STOW_ERROR=""
-
-  # Inside the if so a non-zero exit doesn't trip set -e.
-  if output="$(stow --dir="$DOTFILES_DIR" --target="$target" --restow --no . 2>&1 >/dev/null)"; then
-    return 0
-  fi
-
-  while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    STOW_CONFLICTS[${#STOW_CONFLICTS[@]}]="$target/$path"
-  done <<EOF
-$(printf '%s\n' "$output" | sed -n \
-  -e 's/.*over existing target \(.*\) since.*/\1/p' \
-  -e 's/.*existing target is not owned by stow: \(.*\)/\1/p')
-EOF
-
-  if [ "${#STOW_CONFLICTS[@]}" -eq 0 ]; then
-    STOW_ERROR="$output"
-    return 1
-  fi
-}
-
-detect_stow_conflicts_or_exit() {
-  if ! detect_stow_conflicts "$1"; then
-    error "stow failed for a reason other than a file conflict:"
-    error "$STOW_ERROR"
-    exit 1
-  fi
 }
 
 unsupported() {
@@ -637,6 +584,61 @@ install_fnm() {
   record installed fnm
 }
 
+backup_path() {
+  local path="$1"
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local backup="$path.bak.$stamp"
+  local suffix=1
+
+  while [ -e "$backup" ]; do
+    backup="$path.bak.$stamp-$suffix"
+    suffix=$((suffix + 1))
+  done
+
+  mv "$path" "$backup"
+  echo "$backup"
+}
+
+# Fills STOW_CONFLICTS with the paths stow would refuse to overwrite. A dry
+# run (--no) lists them all at once. Stow phrases conflicts two ways, so match
+# both. Any other failure returns 1 and leaves stow's output in STOW_ERROR.
+detect_stow_conflicts() {
+  local target="$1"
+  local output=""
+  local path
+
+  STOW_CONFLICTS=()
+  STOW_ERROR=""
+
+  # Inside the if so a non-zero exit doesn't trip set -e.
+  if output="$(stow --dir="$DOTFILES_DIR" --target="$target" --restow --no . 2>&1 >/dev/null)"; then
+    return 0
+  fi
+
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    STOW_CONFLICTS[${#STOW_CONFLICTS[@]}]="$target/$path"
+  done <<EOF
+$(printf '%s\n' "$output" | sed -n \
+  -e 's/.*over existing target \(.*\) since.*/\1/p' \
+  -e 's/.*existing target is not owned by stow: \(.*\)/\1/p')
+EOF
+
+  if [ "${#STOW_CONFLICTS[@]}" -eq 0 ]; then
+    STOW_ERROR="$output"
+    return 1
+  fi
+}
+
+detect_stow_conflicts_or_exit() {
+  if ! detect_stow_conflicts "$1"; then
+    error "stow failed for a reason other than a file conflict:"
+    error "$STOW_ERROR"
+    exit 1
+  fi
+}
+
 ensure_real_dirs() {
   local target="$1"
   local dir
@@ -793,6 +795,28 @@ configure_login_shell() {
   record installed "zsh login shell"
 }
 
+add_key_to_agent() {
+  local key="$1"
+  local status=0
+
+  if [ "$PLATFORM" = macos ]; then
+    if ! ssh-add --apple-use-keychain "$key"; then
+      error "Could not add the key to the agent; ssh will add it on first use."
+    fi
+    return
+  fi
+
+  # Use zsh's shared local agent, not a forwarded one. Exit 2 means unreachable.
+  SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add -l &>/dev/null || status=$?
+  if [ "$status" -eq 2 ]; then
+    echo "No ssh-agent is running yet; the key is added on first use in a new zsh session."
+    return
+  fi
+  if ! SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add "$key"; then
+    error "Could not add the key to the agent; ssh will add it on first use."
+  fi
+}
+
 generate_github_ssh_key() {
   local reply
   local github_email
@@ -851,28 +875,6 @@ generate_github_ssh_key() {
   fi
   record installed "GitHub SSH key" "Add it at https://github.com/settings/ssh/new
 Copy it with: $copy_hint"
-}
-
-add_key_to_agent() {
-  local key="$1"
-  local status=0
-
-  if [ "$PLATFORM" = macos ]; then
-    if ! ssh-add --apple-use-keychain "$key"; then
-      error "Could not add the key to the agent; ssh will add it on first use."
-    fi
-    return
-  fi
-
-  # Use zsh's shared local agent, not a forwarded one. Exit 2 means unreachable.
-  SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add -l &>/dev/null || status=$?
-  if [ "$status" -eq 2 ]; then
-    echo "No ssh-agent is running yet; the key is added on first use in a new zsh session."
-    return
-  fi
-  if ! SSH_AUTH_SOCK="$HOME/.ssh/agent.sock" ssh-add "$key"; then
-    error "Could not add the key to the agent; ssh will add it on first use."
-  fi
 }
 
 # Separate from key generation so a re-run still writes the block if an earlier
@@ -944,8 +946,6 @@ install_homebrew_packages() {
   record installed "Homebrew packages"
 }
 
-pnpm_installed() { [ -x "$PNPM_HOME/bin/pnpm" ]; }
-
 # The standalone pnpm bundles its own Node, so it keeps working when fnm
 # switches version. It installs to $PNPM_HOME/bin, which is on PATH.
 install_pnpm() {
@@ -999,7 +999,7 @@ install_user_tool() {
   fi
 }
 
-has_command() { command -v "$1" &>/dev/null; }
+pnpm_installed() { [ -x "$PNPM_HOME/bin/pnpm" ]; }
 herdr_installed() { has_command herdr; }
 claude_installed() { has_command claude; }
 codex_installed() { has_command codex; }
@@ -1020,7 +1020,7 @@ repo_state() {
 }
 
 # Never restores anything: the change may be wanted, so it's left for review.
-check_repo_unchanged() {
+report_repo_changes() {
   local before="$1"
 
   if [ "$(repo_state)" = "$before" ]; then
@@ -1173,6 +1173,32 @@ check_apt_packages() {
   echo "  $(echo "$missing" | wc -w | tr -d ' ') to install: $missing"
 }
 
+# check_user_tool <name> <check command> <what a run would do>
+check_user_tool() {
+  # Unquoted so "has_command fd" splits into a command and its argument.
+  # shellcheck disable=SC2086
+  if $2 &>/dev/null; then
+    echo "  $1: installed"
+  else
+    echo "  $1: a run would $3"
+  fi
+}
+
+check_user_tools() {
+  info "User tools:"
+  check_user_tool fd "has_command fd" "link ~/.local/bin/fd to fdfind"
+  check_user_tool "xterm-ghostty terminfo" ghostty_terminfo_installed "copy it from the ghostty entry into /etc/terminfo"
+  if [ "$DEV_TOOLS" != true ]; then
+    return
+  fi
+  check_user_tool fnm "has_command fnm" "install it"
+  check_user_tool pnpm pnpm_installed "install it"
+  check_user_tool herdr herdr_installed "install it"
+  check_user_tool "Claude Code" claude_installed "install it"
+  check_user_tool Codex codex_installed "install it"
+  check_user_tool OpenCode opencode_installed "install it"
+}
+
 check_docker() {
   local conflicts
   local missing
@@ -1214,32 +1240,6 @@ check_docker() {
   fi
 }
 
-check_user_tools() {
-  info "User tools:"
-  check_user_tool fd "has_command fd" "link ~/.local/bin/fd to fdfind"
-  check_user_tool "xterm-ghostty terminfo" ghostty_terminfo_installed "copy it from the ghostty entry into /etc/terminfo"
-  if [ "$DEV_TOOLS" != true ]; then
-    return
-  fi
-  check_user_tool fnm "has_command fnm" "install it"
-  check_user_tool pnpm pnpm_installed "install it"
-  check_user_tool herdr herdr_installed "install it"
-  check_user_tool "Claude Code" claude_installed "install it"
-  check_user_tool Codex codex_installed "install it"
-  check_user_tool OpenCode opencode_installed "install it"
-}
-
-# check_user_tool <name> <check command> <what a run would do>
-check_user_tool() {
-  # Unquoted so "has_command fd" splits into a command and its argument.
-  # shellcheck disable=SC2086
-  if $2 &>/dev/null; then
-    echo "  $1: installed"
-  else
-    echo "  $1: a run would $3"
-  fi
-}
-
 check_login_shell() {
   local current
 
@@ -1249,6 +1249,23 @@ check_login_shell() {
     echo "  zsh"
   else
     echo "  $current; a run would change it to zsh"
+  fi
+}
+
+check_node() {
+  local version
+
+  info "Node:"
+  if ! command -v fnm &>/dev/null; then
+    echo "  fnm is not installed; a run would install it and the latest LTS Node"
+    return
+  fi
+
+  # fnm current needs fnm env, which writes a multishell dir; fnm default doesn't.
+  if version="$(fnm default 2>/dev/null)" && [ -n "$version" ]; then
+    echo "  installed: $version"
+  else
+    echo "  a run would install the latest LTS Node"
   fi
 }
 
@@ -1273,23 +1290,6 @@ check_pnpm_shadowing() {
 
   if [ "$shadowed" = false ]; then
     echo "  none shadowed"
-  fi
-}
-
-check_node() {
-  local version
-
-  info "Node:"
-  if ! command -v fnm &>/dev/null; then
-    echo "  fnm is not installed; a run would install it and the latest LTS Node"
-    return
-  fi
-
-  # fnm current needs fnm env, which writes a multishell dir; fnm default doesn't.
-  if version="$(fnm default 2>/dev/null)" && [ -n "$version" ]; then
-    echo "  installed: $version"
-  else
-    echo "  a run would install the latest LTS Node"
   fi
 }
 
@@ -1512,7 +1512,7 @@ main() {
       macos) install_homebrew_packages ;;
       debian) install_user_tools ;;
     esac
-    check_repo_unchanged "$repo_before"
+    report_repo_changes "$repo_before"
 
     install_node
     login_github_cli
