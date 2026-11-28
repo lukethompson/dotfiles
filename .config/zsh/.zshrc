@@ -2,7 +2,7 @@
 # Platform
 # =====================================
 
-# Strip the version or suffix from $OSTYPE (e.g. darwin25.0.0, linux-gnu).
+# Map darwin25.0.0 to darwin.zsh and linux-gnu to linux.zsh.
 source "$ZDOTDIR/${OSTYPE%%[-0-9]*}.zsh"
 
 # =====================================

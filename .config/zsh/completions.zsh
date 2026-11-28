@@ -4,67 +4,61 @@
 # General
 # =====================================
 
-# zsh-completions plugin
 fpath=($ZDOTDIR/plugins/zsh-completions/src $fpath)
 
-# Ensure completions directory exists
+# Add generated completions to fpath before compinit scans it.
 mkdir -p $ZDOTDIR/completions
-
-# Generated completions are cached here, written only if the tool is installed
-# and regenerated if empty.
 fpath+=($ZDOTDIR/completions)
 
-# fnm completions
+# Generate _fnm only if it's missing or empty.
 if (( $+commands[fnm] )) && [[ ! -s $ZDOTDIR/completions/_fnm ]]; then
   fnm completions --shell=zsh >| $ZDOTDIR/completions/_fnm
 fi
 
-# Load and initialize zsh completions
 autoload -Uz compinit; compinit
 
 # =====================================
 # Options
 # =====================================
 
-setopt AUTO_LIST # Automatically list choices on ambiguous completion
+setopt AUTO_LIST # List choices when there's more than one match
 setopt COMPLETE_IN_WORD # Complete from both ends of a word
 setopt globdots # Show dotfiles in completion menu
-setopt MENU_COMPLETE # Automatically highlight first element of completion menu
+setopt MENU_COMPLETE # Insert the first match and cycle with Tab
 
 # =====================================
 # zstyles
 # =====================================
 
-# Ztyle pattern
+# Completion context:
 # :completion:<function>:<completer>:<command>:<argument>:<tag>
 
-# Define completers
+# Try filename extensions and standard matches before allowing typos.
 zstyle ':completion:*' completer _extensions _complete _approximate
 
-# Use cache for commands using cache
+# Cache results for completers that support it.
 zstyle ':completion:*' use-cache on
 zstyle ':completion:*' cache-path "$XDG_CACHE_HOME/zsh/.zcompcache"
 
-# Highlight selection
+# Navigate matches with arrow keys.
 zstyle ':completion:*' menu select
 
-# Autocomplete options for cd instead of directory stack
+# Offer cd flags as well as directory stack entries.
 zstyle ':completion:*' complete-options true
 
-# Improve completion messages
+# Color-code completion messages.
 zstyle ':completion:*:*:*:*:corrections' format '%F{yellow}!- %d (errors: %e) -!%f'
 zstyle ':completion:*:*:*:*:descriptions' format '%F{blue}-- %D %d --%f'
 zstyle ':completion:*:*:*:*:messages' format ' %F{purple} -- %d --%f'
 zstyle ':completion:*:*:*:*:warnings' format ' %F{red}-- no matches found --%f'
 
-# Improve completion groups
+# Group matches by type and order the command groups.
 zstyle ':completion:*' group-name ''
 zstyle ':completion:*:*:-command-:*:*' group-order aliases builtins functions commands
 
-# Improve completion hosts
 zstyle ':completion:*' use-ip true
-# Skips hashed entries (Debian's ssh hashes known_hosts by default), markers
-# such as @cert-authority and comments, and drops the [host]:port brackets.
+# Complete SSH hosts from known_hosts; skip hashes, markers, and comments,
+# then take the first host per entry and strip any [host]:port wrapper.
 if [[ -r ~/.ssh/known_hosts ]]; then
   zstyle ':completion:*:(ssh|scp|rsync):*' hosts \
       $(awk '$1 !~ /^[|@#]/ {print $1}' ~/.ssh/known_hosts | cut -d, -f1 |
@@ -75,7 +69,7 @@ fi
 # Additional
 # =====================================
 
-# pnpm completions – must be sourced after compinit
+# Source pnpm's generated script after compinit so it can call compdef.
 if (( $+commands[pnpm] )) && [[ ! -s $ZDOTDIR/completions/_pnpm ]]; then
   pnpm completion zsh >| $ZDOTDIR/completions/_pnpm
 fi
