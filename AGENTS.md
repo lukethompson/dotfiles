@@ -65,13 +65,13 @@ These commands change the machine or checkout. Run them for setup or deployment,
 ### Which zsh file
 
 - `.zshenv` — environment only. Keep it at the repo root: zsh reads it before `ZDOTDIR` is set.
-  Put user `PATH` entries here so `ssh host cmd` finds Node and pnpm without a login or interactive
-  shell. Nested shells inherit `ZDOTDIR` and skip the root `.zshenv`.
+  Put user `PATH` entries here. Nested shells inherit `ZDOTDIR` and skip the root `.zshenv`.
 - `.config/zsh/.zprofile` — login shells. Restore user `PATH` order after macOS `path_helper`
-  and Homebrew setup: `~/.local/bin` and fnm's default Node first, `$PNPM_HOME/bin` last.
+  and Homebrew setup: `~/.local/bin` first, `$PNPM_HOME/bin` last.
 - `.config/zsh/.zshrc` — interactive setup. Guard optional tools with
-  `(( $+commands[tool] ))` so a fresh machine can start a shell before they're installed. On
-  Linux, use the shared local `ssh-agent`, not a forwarded one.
+  `(( $+commands[tool] ))` so a fresh machine can start a shell before they're installed.
+- `.config/zsh/darwin.zsh` and `linux.zsh` — interactive setup for one platform, sourced from
+  `.zshrc` by `$OSTYPE`. `linux.zsh` uses the shared local `ssh-agent`, not a forwarded one.
 - Aliases live in `.config/aliases/base`.
 
 ## Conventions
@@ -82,9 +82,11 @@ These commands change the machine or checkout. Run them for setup or deployment,
 - Shell scripts are bash with `set -euo pipefail`, reporting through the `info`/`success`/`error`
   helpers in `bootstrap.sh`. Every step also calls `record <installed|present|skipped|failed>`
   for the end-of-run summary.
-- Platform-specific steps go in `main`'s and `run_check`'s `case "$PLATFORM"`. Tracked shell
-  config tells the platforms apart by `$OSTYPE` (`darwin*`), never by whether a command
-  exists; command lookups are for tool guards only.
+- Platform-specific steps go in `main`'s and `run_check`'s `case "$PLATFORM"`. macOS is the
+  primary machine: don't trade away its setup to share a line with Debian. Put platform
+  differences in `darwin.zsh` or `linux.zsh`. Only what must exist outside interactive shells
+  goes in `.zshenv`, behind `$OSTYPE`, never behind whether a command exists. Command lookups
+  are for tool guards only.
 - Debian steps beyond the base machine go behind `--rootless-docker` or `--dev-tools`, in both
   `main` and `run_check`. Retry hints use `$(rerun_command)` so they keep the run's options.
 - Reflect new bootstrap machine changes in `--check`. Keep check mode read-only.

@@ -1,56 +1,9 @@
 # =====================================
-# Environment
+# Platform
 # =====================================
 
-# VS Code as the editor wherever it can open the file. In VS Code's or
-# code-server's own terminal, even over SSH, it opens in that window;
-# code-server's terminal has code-server, not code. Elsewhere only outside SSH,
-# and on Linux only in a desktop session. Checked here because Homebrew's code
-# isn't on PATH in ~/.zshenv. --wait makes git wait for the file to be closed.
-() {
-  local editor
-  if [[ $TERM_PROGRAM == vscode ]]; then
-    if (( $+commands[code] )); then
-      editor=code
-    elif (( $+commands[code-server] )); then
-      editor=code-server
-    fi
-  elif (( $+commands[code] )) && [[ -z $SSH_CONNECTION ]] &&
-       [[ $OSTYPE == darwin* || -n $DISPLAY || -n $WAYLAND_DISPLAY ]]; then
-    editor=code
-  fi
-  if [[ -n $editor ]]; then
-    export EDITOR="$editor --wait"
-    export VISUAL="$editor --wait"
-  fi
-}
-
-# One ssh-agent for every session on Linux, so a key's passphrase is asked once
-# per boot: AddKeysToAgent in ~/.ssh/config loads it on first use. A forwarded
-# agent is ignored, or AddKeysToAgent would load this machine's key into the
-# other machine's agent. macOS uses the keychain.
-if [[ $OSTYPE != darwin* ]] && (( $+commands[ssh-agent] )); then
-  () {
-    export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
-    # ssh-add -l exits 2 when no agent answers. Nothing answers on a stale
-    # socket left by a reboot, so it's replaced.
-    ssh-add -l &>/dev/null
-    (( $? != 2 )) && return
-    mkdir -p -m 700 ~/.ssh
-    # Shells that start together (restored panes) would each start an agent and
-    # unlink the others' sockets. One takes the lock and starts it; the rest
-    # re-check once it's released. flock needs the file to exist.
-    local lock=~/.ssh/agent.lock fd
-    : >>$lock
-    zmodload -F zsh/system b:zsystem && zsystem flock -t 10 -f fd $lock || return
-    ssh-add -l &>/dev/null
-    if (( $? == 2 )); then
-      rm -f "$SSH_AUTH_SOCK"
-      ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
-    fi
-    zsystem flock -u $fd
-  }
-fi
+# Strip the version or suffix from $OSTYPE (e.g. darwin25.0.0, linux-gnu).
+source "$ZDOTDIR/${OSTYPE%%[-0-9]*}.zsh"
 
 # =====================================
 # Prompt

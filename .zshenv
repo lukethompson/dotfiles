@@ -3,9 +3,13 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$XDG_CONFIG_HOME/local/share"
 export XDG_CACHE_HOME="$XDG_CONFIG_HOME/cache"
 
-# Editor. .zshrc switches interactive shells to VS Code where it can open.
-export EDITOR="nano"
-export VISUAL="nano"
+# --wait lets Git wait for the editor tab to close.
+if [[ $OSTYPE == darwin* ]]; then
+  export EDITOR="code --wait"
+else
+  export EDITOR="nano"
+fi
+export VISUAL="$EDITOR"
 
 # zsh
 export ZDOTDIR="$XDG_CONFIG_HOME/zsh"
@@ -16,27 +20,10 @@ export SAVEHIST=50000 # Maximum events in history file
 # Exported so nested shells, which never read this file, skip it too.
 export skip_global_compinit=1
 
-# fnm's Node versions and pnpm's global binaries. Set here so PATH below can
-# use them without running fnm; bootstrap.sh sets the same values.
-if [[ $OSTYPE == darwin* ]]; then
-  export FNM_DIR="$HOME/Library/Application Support/fnm"
-else
-  export FNM_DIR="$XDG_DATA_HOME/fnm"
-fi
 export PNPM_HOME="$XDG_DATA_HOME/pnpm"
 
-# Lets a Homebrew-installed Claude Code upgrade its own cask. The native
-# install updates itself and ignores this.
+# Lets a Homebrew-installed Claude Code upgrade its own cask.
 export CLAUDE_CODE_PACKAGE_MANAGER_AUTO_UPDATE=1
 
-# Rootless Docker on Linux. The docker CLI finds it through its "rootless"
-# context, but Docker libraries (Python's docker, Testcontainers) read only
-# DOCKER_HOST and would otherwise try the root daemon's socket.
-if [[ $OSTYPE != darwin* && -S $XDG_RUNTIME_DIR/docker.sock ]]; then
-  export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
-fi
-
-# Path. Set here, not only in .zprofile, so commands run over SSH
-# (ssh host 'node -v') find Node and pnpm. That shell is neither login nor
-# interactive, so this is the only dotfile it reads.
-path=("$HOME/.local/bin" "$FNM_DIR/aliases/default/bin" $path "$PNPM_HOME/bin")
+# Put pnpm last so its global binaries don't shadow other installs.
+path=("$HOME/.local/bin" $path "$PNPM_HOME/bin")

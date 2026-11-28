@@ -192,20 +192,12 @@ detect_platform() {
       unsupported "$os"
       ;;
   esac
-
-  # Keep in sync with .zshenv.
-  if [ "$PLATFORM" = macos ]; then
-    export FNM_DIR="$HOME/Library/Application Support/fnm"
-  else
-    export FNM_DIR="$XDG_DATA_HOME/fnm"
-  fi
 }
 
 wants_dev_tools() {
   [ "$PLATFORM" = macos ] || [ "$DEV_TOOLS" = true ]
 }
 
-# Preserve Debian options so a retry includes the failed step.
 rerun_command() {
   local command="./bootstrap.sh"
 
