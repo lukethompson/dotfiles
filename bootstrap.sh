@@ -230,7 +230,7 @@ install_homebrew() {
 
   eval "$(/opt/homebrew/bin/brew shellenv)"
 
-  if ! command -v brew &>/dev/null; then
+  if ! has_command brew; then
     error "Homebrew installation failed: brew not found on PATH"
     exit 1
   fi
@@ -322,7 +322,7 @@ link_fd() {
   local link="$HOME/.local/bin/fd"
 
   info "Checking for fd..."
-  if command -v fd &>/dev/null; then
+  if has_command fd; then
     success "fd is on PATH"
     record present fd
     return
@@ -569,7 +569,7 @@ run_installer() {
 
 install_fnm() {
   info "Checking for fnm..."
-  if command -v fnm &>/dev/null; then
+  if has_command fnm; then
     success "fnm is already installed"
     record present fnm
     return
@@ -1055,7 +1055,7 @@ login_github_cli() {
   local reply
 
   info "Checking GitHub CLI login..."
-  if ! command -v gh &>/dev/null; then
+  if ! has_command gh; then
     error "gh is not installed, so the GitHub CLI login was skipped."
     record skipped "GitHub CLI login" "Install gh, then run: $login"
     return
@@ -1123,7 +1123,7 @@ check_submodules() {
   local stale
 
   info "Submodules:"
-  if ! command -v git &>/dev/null; then
+  if ! has_command git; then
     echo "  git is not installed; a run installs it, then fetches them"
     return
   fi
@@ -1256,7 +1256,7 @@ check_node() {
   local version
 
   info "Node:"
-  if ! command -v fnm &>/dev/null; then
+  if ! has_command fnm; then
     echo "  fnm is not installed; a run would install it and the latest LTS Node"
     return
   fi
@@ -1316,7 +1316,7 @@ check_stow_conflicts() {
   local path
 
   info "Files that would be backed up before symlinking:"
-  if ! command -v stow &>/dev/null; then
+  if ! has_command stow; then
     echo "  stow is not installed; conflicts are checked once a run installs it"
     return
   fi
@@ -1360,7 +1360,7 @@ check_prompts() {
     echo "  GitHub SSH key: would prompt to generate one"
   fi
 
-  if ! command -v gh &>/dev/null; then
+  if ! has_command gh; then
     echo "  GitHub CLI login: gh is not installed yet; a run would offer to log in once it is"
   elif gh auth status --hostname github.com &>/dev/null; then
     echo "  GitHub CLI login: already logged in"
