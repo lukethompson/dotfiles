@@ -719,14 +719,12 @@ stow_dotfiles() {
   record "$status" "dotfiles symlinks"
 }
 
-# Keep ~/.gitconfig even when empty so git config --global won't write into the repo.
 configure_git_identity() {
   local gitconfig="$HOME/.gitconfig"
   local git_name
   local git_email
 
   info "Checking for local git identity..."
-  touch "$gitconfig"
   git_name="$(git config --file "$gitconfig" --get user.name || true)"
   git_email="$(git config --file "$gitconfig" --get user.email || true)"
 

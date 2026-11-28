@@ -77,8 +77,7 @@ These commands change the machine or checkout. Run them for setup or deployment,
 ## Conventions
 
 - Keep machine-specific values in untracked files: `~/.config/aliases/local`,
-  `~/.config/zsh/.zshrc.local`, and `~/.gitconfig`. Bootstrap creates `~/.gitconfig` even when
-  empty; without it, `git config --global` can write into the tracked `.config/git/config`.
+  `~/.config/zsh/.zshrc.local`, and `~/.gitconfig`.
 - Shell scripts are bash with `set -euo pipefail`, reporting through the `info`/`success`/`error`
   helpers in `bootstrap.sh`. Every step also calls `record <installed|present|skipped|failed>`
   for the end-of-run summary.
